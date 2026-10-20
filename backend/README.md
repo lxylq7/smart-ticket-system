@@ -1,10 +1,12 @@
 # 后端基础工程
 
 已提供基础工程、MySQL、MyBatis-Plus、统一响应、全局异常处理和健康检查，
-并新增最小登录/JWT 和基础工单管理。没有 AI、Redis 或消息队列代码。
+并新增最小登录/JWT、基础工单管理、管理员分配和工单状态流转。没有 AI、Redis 或消息队列代码。
 
-**新阶段启动前**：必须设置 `JWT_SECRET`，并执行历史表 CHECK 迁移。
+**新阶段启动前**：必须设置 `JWT_SECRET`，确认已执行 V2 历史表 CHECK 迁移，
+并在停服后执行 V3 状态迁移（NEW → PENDING、IN_PROGRESS → PROCESSING）。
 生成密钥、接口示例、文件清单和测试步骤见 [基础工单接口文档](docs/ticket-api.md)。
+状态规则、分配/状态接口、测试用例和迁移步骤见 [工单状态流转](docs/ticket-workflow.md)。
 
 ## 环境与版本
 

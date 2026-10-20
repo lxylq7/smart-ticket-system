@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS ticket (
     ai_error_message VARCHAR(500),
     ai_attempts TINYINT NOT NULL DEFAULT 0,
     priority VARCHAR(20) NOT NULL DEFAULT 'MEDIUM',
-    status VARCHAR(20) NOT NULL DEFAULT 'NEW',
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     resolved_at TIMESTAMP(3),
     closed_at TIMESTAMP(3),
     version INT NOT NULL DEFAULT 0,
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS ticket (
     CHECK (category IS NULL OR category IN ('ORDER', 'ACCOUNT', 'TECHNICAL', 'OTHER')),
     CHECK (ai_status <> 'SUCCESS' OR category IS NOT NULL),
     CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH', 'URGENT')),
-    CHECK (status IN ('NEW', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_USER', 'RESOLVED', 'CLOSED')),
+    CONSTRAINT chk_ticket_status CHECK (status IN ('PENDING', 'ASSIGNED', 'PROCESSING', 'WAITING_USER', 'RESOLVED', 'CLOSED')),
     CHECK (CHAR_LENGTH(title) BETWEEN 1 AND 200),
     CHECK (CHAR_LENGTH(description) BETWEEN 1 AND 20000)
 );
@@ -61,5 +61,9 @@ CREATE TABLE IF NOT EXISTS ticket_operation_history (
     CONSTRAINT chk_ticket_history_operation_type CHECK (
         operation_type IN ('CREATE', 'UPDATE', 'STATUS_CHANGE', 'ASSIGN', 'PRIORITY_CHANGE',
             'PUBLIC_REPLY', 'INTERNAL_NOTE', 'AI_CLASSIFY', 'AI_CLASSIFY_FAILED')
-    )
+    ),
+    CONSTRAINT chk_ticket_history_from_status CHECK (from_status IS NULL OR
+        from_status IN ('PENDING', 'ASSIGNED', 'PROCESSING', 'WAITING_USER', 'RESOLVED', 'CLOSED')),
+    CONSTRAINT chk_ticket_history_to_status CHECK (to_status IS NULL OR
+        to_status IN ('PENDING', 'ASSIGNED', 'PROCESSING', 'WAITING_USER', 'RESOLVED', 'CLOSED'))
 );

@@ -10,12 +10,14 @@ import java.time.LocalDateTime;
 public record TicketView(Long id, String ticketNo, String title, String description,
                          TicketCategory category, String categoryReason, ClassificationStatus aiStatus,
                          TicketPriority priority, TicketStatus status, Long creatorId, Long assigneeId,
-                         LocalDateTime createdAt, LocalDateTime updatedAt, Integer version) {
+                         LocalDateTime createdAt, LocalDateTime updatedAt, Integer version,
+                         LocalDateTime resolvedAt, LocalDateTime closedAt) {
 
     public static TicketView from(Ticket ticket) {
         return new TicketView(ticket.getId(), ticket.getTicketNo(), ticket.getTitle(), ticket.getDescription(),
                 ticket.getCategory(), ticket.getCategoryReason(), ticket.getAiStatus(), ticket.getPriority(),
                 ticket.getStatus(), ticket.getCreatorId(), ticket.getAssigneeId(),
-                ticket.getCreatedAt(), ticket.getUpdatedAt(), ticket.getVersion());
+                ticket.getCreatedAt(), ticket.getUpdatedAt(), ticket.getVersion(),
+                ticket.getResolvedAt(), ticket.getClosedAt());
     }
 }

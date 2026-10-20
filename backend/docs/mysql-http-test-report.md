@@ -2,6 +2,9 @@
 
 测试日期：2026-10-20。
 
+本文件记录状态流转开发之前的基础模块验收。最新状态规则和测试结果见
+[工单状态流转](ticket-workflow.md)。当前复测脚本使用独立临时数据库，原库不再自动迁移。
+
 ## 结果
 
 | 验证 | 结果 |
@@ -41,6 +44,6 @@ cd E:\smart-ticket-system\backend
 .\tools\run-mysql-smoke.ps1
 ```
 
-脚本会重新构建、测试并按需执行已知 V2 迁移。原始结果写入
+当前脚本会重新构建、测试，并在独立临时库验证 V2/V3 迁移及状态流转；需要创建和删除临时库的权限。原始结果写入
 `target/mysql-http-smoke-report.txt`，临时应用日志写入 `target/mysql-http-smoke-app.log`。
 本记录不表示尚未实现的状态流转、分配接口、AI 或前端已完成测试。

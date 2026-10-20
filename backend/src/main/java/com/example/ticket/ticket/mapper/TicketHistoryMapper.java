@@ -1,5 +1,7 @@
 package com.example.ticket.ticket.mapper;
 
+import com.example.ticket.ticket.entity.Ticket;
+import com.example.ticket.ticket.enums.TicketStatus;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
 
@@ -8,7 +10,7 @@ public interface TicketHistoryMapper {
     @Insert("""
             INSERT INTO ticket_operation_history
                 (ticket_id, operator_id, operation_type, to_status, to_priority, remark)
-            VALUES (#{ticketId}, #{operatorId}, 'CREATE', 'NEW', 'MEDIUM', '用户创建工单')
+            VALUES (#{ticketId}, #{operatorId}, 'CREATE', 'PENDING', 'MEDIUM', '用户创建工单')
             """)
     int insertCreated(@Param("ticketId") long ticketId, @Param("operatorId") long operatorId);
 
@@ -18,4 +20,22 @@ public interface TicketHistoryMapper {
             VALUES (#{ticketId}, #{operatorId}, 'UPDATE', '用户修改标题和问题描述')
             """)
     int insertUpdated(@Param("ticketId") long ticketId, @Param("operatorId") long operatorId);
+
+    @Insert("""
+            INSERT INTO ticket_operation_history
+                (ticket_id, operator_id, operation_type, from_status, to_status,
+                 from_assignee_id, to_assignee_id, remark)
+            VALUES (#{ticket.id}, #{operatorId}, 'ASSIGN', #{ticket.status}, 'ASSIGNED',
+                    #{ticket.assigneeId}, #{assigneeId}, #{remark})
+            """)
+    int insertAssigned(@Param("ticket") Ticket ticket, @Param("operatorId") long operatorId,
+                       @Param("assigneeId") long assigneeId, @Param("remark") String remark);
+
+    @Insert("""
+            INSERT INTO ticket_operation_history
+                (ticket_id, operator_id, operation_type, from_status, to_status, remark)
+            VALUES (#{ticket.id}, #{operatorId}, 'STATUS_CHANGE', #{ticket.status}, #{target}, #{remark})
+            """)
+    int insertStatusChanged(@Param("ticket") Ticket ticket, @Param("operatorId") long operatorId,
+                            @Param("target") TicketStatus target, @Param("remark") String remark);
 }

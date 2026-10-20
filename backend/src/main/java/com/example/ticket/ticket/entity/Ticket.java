@@ -27,6 +27,8 @@ public class Ticket {
     private Integer version;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime resolvedAt;
+    private LocalDateTime closedAt;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -56,4 +58,8 @@ public class Ticket {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public LocalDateTime getResolvedAt() { return resolvedAt; }
+    public void setResolvedAt(LocalDateTime resolvedAt) { this.resolvedAt = resolvedAt; }
+    public LocalDateTime getClosedAt() { return closedAt; }
+    public void setClosedAt(LocalDateTime closedAt) { this.closedAt = closedAt; }
 }

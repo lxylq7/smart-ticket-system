@@ -20,8 +20,8 @@ INSERT INTO sys_user_role (user_id, role_id) VALUES
     (1, 1), (2, 1), (3, 2), (4, 2), (5, 3), (6, 1);
 
 INSERT INTO ticket (id, ticket_no, creator_id, assignee_id, title, description, status) VALUES
-    (101, 'TEST-101', 1, NULL, 'Alice new', 'Alice new description', 'NEW'),
-    (102, 'TEST-102', 2, NULL, 'Bob new', 'Bob new description', 'NEW'),
+    (101, 'TEST-101', 1, NULL, 'Alice new', 'Alice new description', 'PENDING'),
+    (102, 'TEST-102', 2, NULL, 'Bob new', 'Bob new description', 'PENDING'),
     (103, 'TEST-103', 1, 3, 'Alice assigned', 'Alice assigned description', 'ASSIGNED'),
     (104, 'TEST-104', 2, 4, 'Bob assigned', 'Bob assigned description', 'ASSIGNED'),
     (105, 'TEST-105', 1, 3, 'Alice resolved', 'Alice resolved description', 'RESOLVED');

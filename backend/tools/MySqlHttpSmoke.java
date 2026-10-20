@@ -27,6 +27,8 @@ class MySqlHttpSmoke {
     private final Map<String, Long> users = new LinkedHashMap<>();
     private final List<String> results = new ArrayList<>();
     private Connection database;
+    private String isolatedSchema;
+    private String applicationDatabaseUrl;
     private Process application;
     private String baseUrl;
     private int passed;
@@ -42,6 +44,7 @@ class MySqlHttpSmoke {
             connect();
             migrateIfRequired();
             seedAccounts();
+            migrateStatuses();
             startApplication();
             testHttp();
             success = true;
@@ -66,8 +69,17 @@ class MySqlHttpSmoke {
                 record("FAIL: cleanup - " + cleanupFailure.getClass().getSimpleName());
                 throw cleanupFailure;
             } finally {
-                if (database != null) database.close();
-                record("HTTP assertions passed: " + passed);
+                if (database != null) {
+                    try {
+                        if (isolatedSchema != null) {
+                            execute("DROP DATABASE " + quoteIdentifier(isolatedSchema));
+                            record("Isolated test schema: removed (source database unchanged)");
+                        }
+                    } finally {
+                        database.close();
+                    }
+                }
+                record("HTTP/database assertions passed: " + passed);
                 record("Overall result: " + (success ? "PASS" : "FAIL"));
                 Files.write(Path.of("target/mysql-http-smoke-report.txt"), results, StandardCharsets.UTF_8);
             }
@@ -82,6 +94,81 @@ class MySqlHttpSmoke {
         execute("SET SESSION lock_wait_timeout = 5");
         execute("SET SESSION innodb_lock_wait_timeout = 5");
         record("MySQL connection: OK");
+        String sourceSchema = database.getCatalog();
+        List<String> definitions = new ArrayList<>();
+        for (String table : List.of("sys_user", "sys_role", "sys_user_role", "ticket", "ticket_message", "ticket_operation_history")) {
+            try (Statement statement = database.createStatement();
+                 ResultSet rows = statement.executeQuery("SHOW CREATE TABLE " + quoteIdentifier(table))) {
+                if (!rows.next()) throw new AssertionError("Expected source table not found");
+                definitions.add(rows.getString(2));
+            }
+        }
+        String schema = prefix + "_db";
+        execute("CREATE DATABASE " + quoteIdentifier(schema) + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        isolatedSchema = schema;
+        database.setCatalog(schema);
+        for (String definition : definitions) execute(definition);
+        execute("INSERT INTO sys_role SELECT * FROM " + quoteIdentifier(sourceSchema) + ".sys_role");
+        String sourceUrl = String.valueOf(ds.get("url"));
+        int query = sourceUrl.indexOf('?');
+        int schemaStart = sourceUrl.lastIndexOf('/', query < 0 ? sourceUrl.length() : query);
+        applicationDatabaseUrl = sourceUrl.substring(0, schemaStart + 1) + schema
+                + (query < 0 ? "" : sourceUrl.substring(query));
+        record("Isolated test schema: created from source table definitions; only roles copied");
+    }
+
+    private String quoteIdentifier(String identifier) {
+        return "`" + identifier.replace("`", "``") + "`";
+    }
+
+    private void migrateStatuses() throws Exception {
+        // Force the original status constraints in the isolated schema to exercise the upgrade,
+        // even when the developer's source schema has already been upgraded.
+        execute("ALTER TABLE ticket DROP CHECK chk_ticket_status, ADD CONSTRAINT chk_ticket_status "
+                + "CHECK (status IN ('NEW','ASSIGNED','IN_PROGRESS','WAITING_USER','RESOLVED','CLOSED'))");
+        execute("ALTER TABLE ticket_operation_history DROP CHECK chk_ticket_history_from_status, "
+                + "DROP CHECK chk_ticket_history_to_status, "
+                + "ADD CONSTRAINT chk_ticket_history_from_status CHECK (from_status IS NULL OR from_status IN "
+                + "('NEW','ASSIGNED','IN_PROGRESS','WAITING_USER','RESOLVED','CLOSED')), "
+                + "ADD CONSTRAINT chk_ticket_history_to_status CHECK (to_status IS NULL OR to_status IN "
+                + "('NEW','ASSIGNED','IN_PROGRESS','WAITING_USER','RESOLVED','CLOSED'))");
+        execute("INSERT INTO ticket (ticket_no, creator_id, title, description, status, version) "
+                + "VALUES (?, ?, 'Legacy pending', 'Migration test', 'NEW', 7)", prefix + "_legacy1", users.get("owner"));
+        execute("INSERT INTO ticket (ticket_no, creator_id, assignee_id, title, description, status, version) "
+                + "VALUES (?, ?, ?, 'Legacy processing', 'Migration test', 'IN_PROGRESS', 3)",
+                prefix + "_legacy2", users.get("owner"), users.get("agent"));
+        long legacy = scalar("SELECT id FROM ticket WHERE ticket_no = ?", prefix + "_legacy2");
+        execute("INSERT INTO ticket_operation_history (ticket_id, operator_id, operation_type, from_status, to_status) "
+                + "VALUES (?, ?, 'STATUS_CHANGE', 'NEW', 'IN_PROGRESS')", legacy, users.get("agent"));
+        applyStatusMigration();
+        check(scalar("SELECT COUNT(*) FROM ticket WHERE status IN ('NEW', 'IN_PROGRESS')") == 0,
+                "V3 converts all legacy ticket status names");
+        check(scalar("SELECT version FROM ticket WHERE ticket_no = ? AND status = 'PENDING'", prefix + "_legacy1") == 8,
+                "V3 converts NEW to PENDING and invalidates old versions");
+        check(scalar("SELECT version FROM ticket WHERE id = ? AND status = 'PROCESSING'", legacy) == 4,
+                "V3 converts IN_PROGRESS to PROCESSING");
+        check(scalar("SELECT COUNT(*) FROM ticket_operation_history WHERE ticket_id = ? "
+                + "AND from_status = 'PENDING' AND to_status = 'PROCESSING'", legacy) == 1,
+                "V3 converts legacy history status names");
+        applyStatusMigration();
+        check(scalar("SELECT version FROM ticket WHERE id = ?", legacy) == 4,
+                "V3 rerun does not increment already converted versions");
+        try {
+            execute("UPDATE ticket SET status = 'NEW' WHERE id = ?", legacy);
+            throw new AssertionError("V3 must reject old status values");
+        } catch (SQLException expected) {
+            check(expected.getErrorCode() == 3819, "V3 final CHECK rejects old status values");
+        }
+        record("V3 migration: verified only in isolated schema (source schema not migrated)");
+    }
+
+    private void applyStatusMigration() throws Exception {
+        String sql = Files.readString(Path.of("docs/sql/V3__ticket_status_workflow.sql"));
+        sql = sql.replaceAll("(?m)^--[^\\r\\n]*", "");
+        for (String statement : sql.split(";")) {
+            String command = statement.strip();
+            if (!command.isEmpty() && !command.toUpperCase(Locale.ROOT).startsWith("USE ")) execute(command);
+        }
     }
 
     private void migrateIfRequired() throws Exception {
@@ -139,6 +226,7 @@ class MySqlHttpSmoke {
                 "-jar", "target/smart-ticket-backend-0.0.1-SNAPSHOT.jar",
                 "--spring.profiles.active=local", "--server.port=0");
         builder.environment().put("JWT_SECRET", Base64.getEncoder().encodeToString(bytes));
+        builder.environment().put("SPRING_DATASOURCE_URL", applicationDatabaseUrl);
         builder.redirectErrorStream(true).redirectOutput(log.toFile());
         application = builder.start();
         for (int attempt = 0; attempt < 160; attempt++) {
@@ -176,7 +264,7 @@ class MySqlHttpSmoke {
 
         JsonNode detail = expect("Owner reads own ticket", request("GET", "/api/tickets/" + main, owner, null), 200).path("data");
         check(detail.path("creatorId").asLong() == users.get("owner"), "Creator comes from authentication");
-        check(detail.path("status").asText().equals("NEW") && detail.path("priority").asText().equals("MEDIUM")
+        check(detail.path("status").asText().equals("PENDING") && detail.path("priority").asText().equals("MEDIUM")
                 && detail.path("aiStatus").asText().equals("PENDING") && detail.path("category").isNull()
                 && detail.path("assigneeId").isNull(), "Server-controlled creation defaults");
         expect("Other user cannot read", request("GET", "/api/tickets/" + main, other, null), 404);
@@ -190,7 +278,7 @@ class MySqlHttpSmoke {
         JsonNode mine = expect("My tickets with forged identity query", request("GET",
                 "/api/tickets/my?keyword=" + prefix + "&creatorId=" + users.get("other"), owner, null), 200).path("data");
         check(mine.path("total").asLong() == 4, "Query parameter cannot change creator scope");
-        JsonNode filtered = expect("Status filter", request("GET", "/api/tickets?keyword=" + prefix + "&status=NEW", owner, null), 200).path("data");
+        JsonNode filtered = expect("Status filter", request("GET", "/api/tickets?keyword=" + prefix + "&status=PENDING", owner, null), 200).path("data");
         check(filtered.path("total").asLong() == 2, "Status filter stays inside permission scope");
         JsonNode all = expect("Admin pagination", request("GET", "/api/tickets?keyword=" + prefix, admin, null), 200).path("data");
         check(all.path("total").asLong() == 5, "Admin sees all five temporary tickets");
@@ -242,10 +330,100 @@ class MySqlHttpSmoke {
         check(scalar("SELECT COUNT(*) FROM ticket_operation_history WHERE ticket_id = ? AND operation_type = 'UPDATE'", main) == 2,
                 "Only successful updates have UPDATE history");
 
+        testWorkflow(owner, agent, admin, second, assigned);
+
         execute("UPDATE sys_user SET status = 'DISABLED' WHERE id = ?", users.get("owner"));
         expect("Disabled user old JWT rejected", request("GET", "/api/tickets", owner, null), 401);
         execute("DELETE FROM sys_user_role WHERE user_id = ?", users.get("agent"));
         expect("Removed roles invalidate old JWT", request("GET", "/api/tickets", agent, null), 401);
+    }
+
+    private void testWorkflow(String owner, String agent, String admin, long id, long assigned) throws Exception {
+        expect("User cannot assign", request("PUT", "/api/tickets/" + id + "/assignment", owner,
+                Map.of("assigneeId", users.get("agent"), "version", 0)), 403);
+        expect("Agent cannot assign", request("PUT", "/api/tickets/" + id + "/assignment", agent,
+                Map.of("assigneeId", users.get("agent"), "version", 0)), 403);
+        expect("User cannot change status", request("PUT", "/api/tickets/" + id + "/status", owner,
+                Map.of("status", "PROCESSING", "version", 0)), 403);
+        expect("Inactive role target rejected", request("PUT", "/api/tickets/" + id + "/assignment", admin,
+                Map.of("assigneeId", users.get("owner"), "version", 0)), 400);
+        expect("Admin initial assignment", request("PUT", "/api/tickets/" + id + "/assignment", admin,
+                Map.of("assigneeId", users.get("agent"), "version", 0)), 200);
+        expect("Illegal skip to resolved", request("PUT", "/api/tickets/" + id + "/status", agent,
+                Map.of("status", "RESOLVED", "version", 1)), 409);
+        workflowStatus(id, agent, "PROCESSING", 1, 200);
+        workflowStatus(id, agent, "WAITING_USER", 2, 200);
+        workflowStatus(id, agent, "PROCESSING", 3, 200);
+        JsonNode resolved = workflowStatus(id, agent, "RESOLVED", 4, 200).path("data");
+        check(!resolved.path("resolvedAt").isNull() && resolved.path("closedAt").isNull(), "Resolution timestamp is set");
+        workflowStatus(id, agent, "CLOSED", 5, 403);
+        workflowStatus(id, agent, "PROCESSING", 5, 200);
+        check(scalar("SELECT COUNT(*) FROM ticket WHERE id = ? AND resolved_at IS NULL", id) == 1,
+                "Reopening clears resolved timestamp");
+        workflowStatus(id, agent, "RESOLVED", 6, 200);
+        JsonNode closed = workflowStatus(id, admin, "CLOSED", 7, 200).path("data");
+        check(!closed.path("resolvedAt").isNull() && !closed.path("closedAt").isNull(), "Close preserves resolution and sets close time");
+        workflowStatus(id, admin, "PROCESSING", 8, 409);
+        check(scalar("SELECT COUNT(*) FROM ticket_operation_history WHERE ticket_id = ? AND operation_type = 'STATUS_CHANGE'", id) == 7,
+                "Each successful status change has one history record");
+        check(scalar("SELECT COUNT(*) FROM ticket_operation_history WHERE ticket_id = ? AND operation_type = 'ASSIGN' "
+                + "AND from_status = 'PENDING' AND to_status = 'ASSIGNED' AND to_assignee_id = ?", id, users.get("agent")) == 1,
+                "Assignment history records old/new state and agent");
+
+        HttpRequest first = build("PUT", "/api/tickets/" + assigned + "/status", agent,
+                Map.of("status", "PROCESSING", "version", 1));
+        HttpRequest second = build("PUT", "/api/tickets/" + assigned + "/assignment", admin,
+                Map.of("assigneeId", users.get("agent2"), "version", 1));
+        var left = client.sendAsync(first, HttpResponse.BodyHandlers.ofString());
+        var right = client.sendAsync(second, HttpResponse.BodyHandlers.ofString());
+        List<Integer> statuses = new ArrayList<>(List.of(left.get(20, TimeUnit.SECONDS).statusCode(), right.get(20, TimeUnit.SECONDS).statusCode()));
+        Collections.sort(statuses);
+        check(statuses.equals(List.of(200, 409)) || statuses.equals(List.of(200, 404)),
+                "Real MySQL status versus reassignment has one winner");
+        check(scalar("SELECT version FROM ticket WHERE id = ?", assigned) == 2, "Racing workflow increments version once");
+        check(scalar("SELECT COUNT(*) FROM ticket_operation_history WHERE ticket_id = ? AND operation_type IN ('ASSIGN','STATUS_CHANGE')", assigned) == 1,
+                "Losing workflow action creates no history");
+        boolean alreadyAssigned = scalar("SELECT assignee_id FROM ticket WHERE id = ?", assigned) == users.get("agent2");
+        expect("Admin reassigns to second agent", request("PUT", "/api/tickets/" + assigned + "/assignment", admin,
+                Map.of("assigneeId", users.get("agent2"), "version", 2)), alreadyAssigned ? 409 : 200);
+        int version = (int) scalar("SELECT version FROM ticket WHERE id = ?", assigned);
+        workflowStatus(assigned, agent, "PROCESSING", version, 404);
+        workflowStatus(assigned, login("agent2"), "PROCESSING", version, 200);
+
+        testWorkflowRollback(owner, agent, admin);
+    }
+
+    private void testWorkflowRollback(String owner, String agent, String admin) throws Exception {
+        long id = create(owner, "rollback");
+        execute("ALTER TABLE ticket_operation_history ADD CONSTRAINT chk_smoke_block_history "
+                + "CHECK (ticket_id <> " + id + " OR operation_type <> 'ASSIGN')");
+        try {
+            expect("Assignment history failure", request("PUT", "/api/tickets/" + id + "/assignment", admin,
+                    Map.of("assigneeId", users.get("agent"), "version", 0)), 503);
+            check(scalar("SELECT COUNT(*) FROM ticket WHERE id = ? AND status = 'PENDING' AND assignee_id IS NULL AND version = 0", id) == 1,
+                    "Real MySQL failed assignment rolls back assignee, state and version");
+        } finally {
+            execute("ALTER TABLE ticket_operation_history DROP CHECK chk_smoke_block_history");
+        }
+        expect("Assignment after rollback", request("PUT", "/api/tickets/" + id + "/assignment", admin,
+                Map.of("assigneeId", users.get("agent"), "version", 0)), 200);
+        workflowStatus(id, agent, "PROCESSING", 1, 200);
+        execute("ALTER TABLE ticket_operation_history ADD CONSTRAINT chk_smoke_block_history "
+                + "CHECK (ticket_id <> " + id + " OR operation_type <> 'STATUS_CHANGE' OR to_status <> 'RESOLVED')");
+        try {
+            workflowStatus(id, agent, "RESOLVED", 2, 503);
+            check(scalar("SELECT COUNT(*) FROM ticket WHERE id = ? AND status = 'PROCESSING' AND version = 2 AND resolved_at IS NULL", id) == 1,
+                    "Real MySQL failed status change rolls back state, version and timestamp");
+            check(scalar("SELECT COUNT(*) FROM ticket_operation_history WHERE ticket_id = ? AND operation_type = 'STATUS_CHANGE'", id) == 1,
+                    "Real MySQL rolled-back operation leaves no extra history");
+        } finally {
+            execute("ALTER TABLE ticket_operation_history DROP CHECK chk_smoke_block_history");
+        }
+    }
+
+    private JsonNode workflowStatus(long id, String token, String status, int version, int expected) throws Exception {
+        return expect("Workflow " + status, request("PUT", "/api/tickets/" + id + "/status", token,
+                Map.of("status", status, "version", version)), expected);
     }
 
     private String login(String name) throws Exception {

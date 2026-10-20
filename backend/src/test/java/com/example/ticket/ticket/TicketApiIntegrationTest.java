@@ -139,7 +139,7 @@ class TicketApiIntegrationTest {
                 .andExpect(jsonPath("$.data.category").isEmpty())
                 .andExpect(jsonPath("$.data.aiStatus").value("PENDING"))
                 .andExpect(jsonPath("$.data.priority").value("MEDIUM"))
-                .andExpect(jsonPath("$.data.status").value("NEW"))
+                .andExpect(jsonPath("$.data.status").value("PENDING"))
                 .andExpect(jsonPath("$.data.version").value(0))
                 .andExpect(jsonPath("$.data.title").value("支付异常"))
                 .andExpect(jsonPath("$.data.createdAt").isString())
@@ -259,7 +259,7 @@ class TicketApiIntegrationTest {
     @Test
     void filtersAndPaginationBoundariesAreValidated() throws Exception {
         String token = login("alice");
-        mvc.perform(get("/api/tickets").header("Authorization", bearer(token)).param("status", "NEW"))
+        mvc.perform(get("/api/tickets").header("Authorization", bearer(token)).param("status", "PENDING"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
         mvc.perform(get("/api/tickets").header("Authorization", bearer(token)).param("keyword", "Bob"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
@@ -285,7 +285,7 @@ class TicketApiIntegrationTest {
                 .andExpect(jsonPath("$.data.category").isEmpty())
                 .andExpect(jsonPath("$.data.categoryReason").isEmpty())
                 .andExpect(jsonPath("$.data.aiStatus").value("PENDING"))
-                .andExpect(jsonPath("$.data.status").value("NEW"));
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ticket_operation_history WHERE ticket_id = 101 AND operation_type = 'UPDATE'",
                 Long.class)).isEqualTo(1L);
     }

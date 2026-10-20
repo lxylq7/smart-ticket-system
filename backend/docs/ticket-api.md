@@ -1,13 +1,14 @@
 # 基础工单管理与最小登录
 
 沿用 `Controller → Service → Mapper`。Service 处理业务、数据权限和事务，Mapper 执行 SQL。
-本阶段没有注册、客服分配、状态流转、回复消息、AI 调用和前端。
+本文说明基础工单接口。分配和状态流转现已实现，见 [工单状态流转](ticket-workflow.md)。
+尚未提供注册、回复消息、AI 调用和前端。
 
 ## 启动准备
 
 1. 沿用前一阶段 MySQL 8 的数据库和六张表，不重新建表或清空数据。
 2. 手工执行 [V2__ticket_update_operation.sql](sql/V2__ticket_update_operation.sql)，只给历史表 CHECK 增加 `UPDATE` 类型。MySQL DDL 会隐式提交，请在没有未完成事务的独立控制台执行。
-3. 按 [README](../README.md) 配置环境变量或外置 `backend/config/application-local.yml` 数据库连接。
+3. 新版状态流转还需停服执行 [V3 状态迁移](sql/V3__ticket_status_workflow.sql)，将 NEW/IN_PROGRESS 改为 PENDING/PROCESSING；再按 [README](../README.md) 配置环境变量或外置 `backend/config/application-local.yml` 数据库连接。
 4. 生成并设置 `JWT_SECRET`，从 backend 目录启动：
 
 ```powershell
@@ -34,18 +35,18 @@ JWT 使用 HS256，有效期 3600 秒。运行密钥无默认值，至少 32 字
 | 创建 | 可以，创建人为当前用户 | 无 USER 角色时不允许 | 无 USER 角色时不允许 |
 | 详情和通用分页 | 自己创建的 | 分配给自己的 | 全部 |
 | 我的工单 | 自己创建的 | 无 USER 角色时不允许 | 无 USER 角色时不允许 |
-| 修改标题、描述 | 自己创建、NEW 且未分配时 | 无 USER 角色时不允许 | 无 USER 角色时不允许 |
+| 修改标题、描述 | 自己创建、PENDING 且未分配时 | 无 USER 角色时不允许 | 无 USER 角色时不允许 |
 
 - 多角色账号的通用查询范围取并集；`/my` 额外限制当前创建人。
 - Service 再次校验身份和角色，身份只来自 Spring Security 的认证信息。JWT 每次使用时重新读取账号状态和角色。
-- 创建仅接收标题、描述。默认 `MEDIUM / NEW / PENDING`、无分类、无处理人、version=0。
+- 创建仅接收标题、描述。默认优先级 `MEDIUM`、工单状态 `PENDING`、分类状态 `PENDING`，无分类、无处理人、version=0。
 - 工单编号为 32 位不带横线的 UUID，有数据库唯一索引。
 - 修改仅接收标题、描述、version。修改内容后清空旧分类、理由和 AI 错误，重置为 PENDING，不发起 AI 调用。
 - 未定义 JSON 字段返回 400；不能通过 creatorId、assigneeId、status 等注入身份或修改保护字段。
 - 查询参数不开放创建人、处理人的筛选；附带 userId、creatorId 不会改变数据权限。
 - 数据权限过滤、COUNT、LIMIT 均在数据库执行，按 `created_at DESC, id DESC` 稳定排序。
 - 不存在和不可见的工单统一返回 404，避免泄露他人工单是否存在。
-- 修改 SQL 同时校验创建人、版本、NEW 状态和处理人为空，防止覆盖更新及检查后状态变化。
+- 修改 SQL 同时校验创建人、版本、PENDING 状态和处理人为空，防止覆盖更新及检查后状态变化。
 - 创建/修改与对应历史记录同事务，历史记录失败则整个操作回滚。
 
 ## 响应结构
@@ -65,12 +66,14 @@ JWT 使用 HS256，有效期 3600 秒。运行密钥无默认值，至少 32 字
   "categoryReason": null,
   "aiStatus": "PENDING",
   "priority": "MEDIUM",
-  "status": "NEW",
+  "status": "PENDING",
   "creatorId": 1001,
   "assigneeId": null,
   "createdAt": "2026-10-20T20:00:00",
   "updatedAt": "2026-10-20T20:00:00",
-  "version": 0
+  "version": 0,
+  "resolvedAt": null,
+  "closedAt": null
 }
 ```
 
@@ -126,7 +129,7 @@ JWT 使用 HS256，有效期 3600 秒。运行密钥无默认值，至少 32 字
     "categoryReason": null,
     "aiStatus": "PENDING",
     "priority": "MEDIUM",
-    "status": "NEW",
+    "status": "PENDING",
     "creatorId": 1001,
     "assigneeId": null,
     "createdAt": "2026-10-20T20:00:00",
@@ -158,7 +161,7 @@ JWT 使用 HS256，有效期 3600 秒。运行密钥无默认值，至少 32 字
     "categoryReason": null,
     "aiStatus": "PENDING",
     "priority": "MEDIUM",
-    "status": "NEW",
+    "status": "PENDING",
     "creatorId": 1001,
     "assigneeId": null,
     "createdAt": "2026-10-20T20:00:00",
@@ -182,7 +185,7 @@ ID 必须是正整数；不可见或不存在返回 HTTP 404：
 
 ## 4. 分页查询
 
-请求 `GET /api/tickets?page=1&size=20&status=NEW&aiStatus=PENDING`。
+请求 `GET /api/tickets?page=1&size=20&status=PENDING&aiStatus=PENDING`。
 
 | 参数 | 规则 |
 | --- | --- |
@@ -192,7 +195,7 @@ ID 必须是正整数；不可见或不存在返回 HTTP 404：
 | category | 可选：ORDER、ACCOUNT、TECHNICAL、OTHER |
 | aiStatus | 可选：PENDING、SUCCESS、FAILED |
 | priority | 可选：LOW、MEDIUM、HIGH、URGENT |
-| status | 可选：NEW、ASSIGNED、IN_PROGRESS、WAITING_USER、RESOLVED、CLOSED |
+| status | 可选：PENDING、ASSIGNED、PROCESSING、WAITING_USER、RESOLVED、CLOSED |
 
 响应 HTTP 200，以下为空结果示例：
 
@@ -232,7 +235,7 @@ HTTP 200 响应仍为完整工单对象，title/description 为本次提交内�
     "categoryReason": null,
     "aiStatus": "PENDING",
     "priority": "MEDIUM",
-    "status": "NEW",
+    "status": "PENDING",
     "creatorId": 1001,
     "assigneeId": null,
     "createdAt": "2026-10-20T20:00:00",
@@ -244,11 +247,11 @@ HTTP 200 响应仍为完整工单对象，title/description 为本次提交内�
 ```
 
 version 必填、不能为负，必须来自最近一次查询。必须同时提供标题和描述。
-版本冲突返回 409；已分配或非 NEW 返回 409。本阶段没有状态、优先级和分配修改接口。
+版本冲突返回 409；已分配或非 PENDING 返回 409。分配和状态修改使用 [独立接口](ticket-workflow.md)，优先级修改尚未实现。
 
 ## 6. 我的工单
 
-请求 `GET /api/tickets/my?page=1&size=10&status=NEW`，仅 USER 角色可调用。
+请求 `GET /api/tickets/my?page=1&size=10&status=PENDING`，仅 USER 角色可调用。
 参数与通用分页相同，始终限制 creatorId 为当前认证用户。
 
 HTTP 200 响应示例：
@@ -271,7 +274,7 @@ HTTP 200 响应示例：
 | 401 | UNAUTHORIZED | 未登录、无效/过期 Token、账号已禁用或无有效角色 |
 | 403 | FORBIDDEN | 角色无权执行操作 |
 | 404 | TICKET_NOT_FOUND | 工单不存在或不可见 |
-| 409 | TICKET_NOT_EDITABLE | 已分配或非 NEW |
+| 409 | TICKET_NOT_EDITABLE | 已分配或非 PENDING |
 | 409 | TICKET_CONFLICT | 版本冲突或更新时可编辑状态已改变 |
 | 503 | DATABASE_UNAVAILABLE | 数据库访问失败，包含历史写入失败 |
 
@@ -326,16 +329,16 @@ cd E:\smart-ticket-system\backend
 需要 Java 17、Maven，以及 `config/application-local.yml` 中可用的本地 MySQL 配置；
 数据库中需已有 ACTIVE 的 USER、AGENT、ADMIN 角色。脚本先执行 `mvn clean verify`，
 再启动打包 JAR，在随机端口测试真实 HTTP 接口，不占用 8080。
-脚本读取本地数据库配置，不打印密码或 Token；创建五个随机临时账号及测试工单，结束时清理，
-不重置现有账号密码。仅用于开发数据库。
+脚本读取本地数据库配置，不打印密码或 Token；创建独立的随机临时数据库，复制六张表的结构和系统角色，
+在临时库中创建五个随机账号及测试工单。测试结束清理临时库，不重置现有账号密码，不修改原数据库。
+需要数据库账号具有创建/删除临时库以及读表结构、系统角色的权限。仅用于开发环境。
 
-如果历史表仍使用原来的八种操作类型，脚本会执行已有 V2 迁移，为操作类型增加 UPDATE；
-已包含 UPDATE 时跳过，遇到不符合预期的约束时终止。该 DDL 会隐式提交并保留，不随测试数据清理回滚。
-应用本身不会自动执行迁移。
+V2 和 V3 迁移只在临时库验证；包括旧状态和历史转换、版本递增、重复执行、最终 CHECK 约束。
+原库仍需按启动准备手工迁移，应用本身不会自动执行迁移。
 
 原始断言报告位于 `target/mysql-http-smoke-report.txt`，临时应用日志位于
-`target/mysql-http-smoke-app.log`。这些文件不提交 Git。最近一次结果见
-[自动测试记录](mysql-http-test-report.md)。
+`target/mysql-http-smoke-app.log`。这些文件不提交 Git。最新测试结果见
+[状态流转测试记录](ticket-workflow.md)，此前基础模块记录见 [自动测试记录](mysql-http-test-report.md)。
 
 ## 文件变更清单
 
@@ -368,13 +371,13 @@ HealthIntegrationTest.java、根目录与后端 README。没有重构已完成�
 ## 已知限制
 
 - 没有注册、账号管理、修改密码、JWT 刷新和服务端主动登出；密码必须为 BCrypt 摘要。
-- 没有 AI、分配、状态流转、消息、附件接口；新工单保持 NEW/PENDING，留给后续阶段处理。
+- 没有 AI、消息、附件接口；新工单的工单状态和分类状态均为 PENDING，工单可通过独立接口分配和流转。
 - 没有管理员代用户修改内容的能力。
 - 当前无请求幂等，重复提交会创建不同工单；标题搜索使用 LIKE。
-- 应用不会自动运行 SQL 脚本；部署到其他数据库时仍需确认 V2 迁移已执行。
+- 应用不会自动运行 SQL 脚本；部署时仍需确认 V2、V3 迁移已执行。
 - 功能在独立分支开发并提交，目前未合并 main。
 
-## 本次验证记录
+## 基础模块阶段验证记录（状态流转之前）
 
 - `mvn clean verify`：31 项测试通过，0 失败，0 错误，成功生成可执行 JAR。
 - 使用打包 JAR 和本地 MySQL 8.0.44 完成真实 HTTP 测试：95 项断言通过，整体 PASS。

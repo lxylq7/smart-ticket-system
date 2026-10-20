@@ -48,7 +48,7 @@ public class TicketService {
         ticket.setDescription(request.description().strip());
         ticket.setAiStatus(ClassificationStatus.PENDING);
         ticket.setPriority(TicketPriority.MEDIUM);
-        ticket.setStatus(TicketStatus.NEW);
+        ticket.setStatus(TicketStatus.PENDING);
         ticket.setVersion(0);
         mapper.insert(ticket);
         historyMapper.insertCreated(ticket.getId(), user.id());
@@ -89,7 +89,7 @@ public class TicketService {
         if (ticket == null) {
             throw notFound();
         }
-        if (ticket.getStatus() != TicketStatus.NEW || ticket.getAssigneeId() != null) {
+        if (ticket.getStatus() != TicketStatus.PENDING || ticket.getAssigneeId() != null) {
             throw new ApiException(HttpStatus.CONFLICT, "TICKET_NOT_EDITABLE", "工单已分配或开始处理，不能修改标题和描述");
         }
         UpdateTicketRequest normalized = new UpdateTicketRequest(
