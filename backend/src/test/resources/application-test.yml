@@ -4,3 +4,7 @@ spring:
     username: sa
     password: ""
     driver-class-name: org.h2.Driver
+
+security:
+  jwt:
+    secret: test-only-signing-secret-not-for-production-2026

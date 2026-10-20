@@ -1,7 +1,10 @@
 # 后端基础工程
 
-本阶段只提供 Spring Boot 启动、MySQL 连接、MyBatis-Plus、统一响应、全局异常处理和健康检查。
-没有用户、工单、登录权限、AI、Redis 或消息队列代码。Spring Security、JWT 和 Spring AI 在对应阶段引入。
+已提供基础工程、MySQL、MyBatis-Plus、统一响应、全局异常处理和健康检查，
+并新增最小登录/JWT 和基础工单管理。没有 AI、Redis 或消息队列代码。
+
+**新阶段启动前**：必须设置 `JWT_SECRET`，并执行历史表 CHECK 迁移。
+生成密钥、接口示例、文件清单和测试步骤见 [基础工单接口文档](docs/ticket-api.md)。
 
 ## 环境与版本
 
@@ -47,7 +50,8 @@ backend/
 ```
 
 仓库根目录 `.gitignore` 忽略编译产物、IDE 文件、环境文件和 `application-local.yml`。
-暂不创建用户和工单目录，也不自动建表、更新表结构或插入数据。后续模块开发时再增加 Mapper 扫描包。
+上面列出基础阶段目录；新增 auth、security、ticket 模块见接口文档中的文件清单。
+不自动建表、更新表结构或插入数据。
 
 ## 启动方式一：环境变量
 
@@ -58,6 +62,8 @@ Set-Location E:\smart-ticket-system\backend
 
 $env:DB_USERNAME = '你的数据库用户名'
 $env:DB_PASSWORD = '你的数据库密码'
+
+# 还需生成并设置 JWT_SECRET，具体命令见 docs/ticket-api.md 的启动准备。
 
 # 可选；默认连接 localhost:3306/smart_ticket
 $env:DB_URL = 'jdbc:mysql://localhost:3306/smart_ticket?useUnicode=true&characterEncoding=UTF-8&connectionTimeZone=UTC&connectTimeout=5000&socketTimeout=5000'
@@ -85,6 +91,7 @@ mvn spring-boot:run '-Dspring-boot.run.profiles=local'
 ```
 
 实际的 `config/application-local.yml` 被 Git 忽略，且位于资源目录之外，不会打包进入 JAR。
+此方式也需要配置 `JWT_SECRET` 环境变量，或在本地 YAML 增加 `security.jwt.secret`。
 使用此方式时，从 `backend` 目录启动；IDE 请将工作目录设置为 `backend` 并激活 `local`。
 
 ## 编译、测试、打包
@@ -162,7 +169,8 @@ curl.exe -i http://localhost:8080/api/health/db
 
 ```powershell
 # 不存在的资源：HTTP 404，code=NOT_FOUND
-curl.exe -i http://localhost:8080/api/not-exists
+# 新阶段需先登录；未登录会优先返回 401
+curl.exe -i -H 'Authorization: Bearer <登录返回的accessToken>' http://localhost:8080/api/not-exists
 
 # 不支持的请求方法：HTTP 405，code=METHOD_NOT_ALLOWED
 curl.exe -i -X POST http://localhost:8080/api/health
@@ -178,6 +186,7 @@ API 不返回 SQL、数据库地址、账号或堆栈信息。
 | --- | --- |
 | `invalid target release: 17` 或类版本不兼容 | 用 `java -version` 和 `mvn -version` 确认 Maven 实际使用 JDK 17，检查 `JAVA_HOME` 和 IDE 的 Maven JDK。 |
 | `Could not resolve placeholder 'DB_USERNAME'` / `DB_PASSWORD` | 当前进程没有凭据环境变量；设置后在同一终端启动，或使用 local profile。 |
+| `JWT_SECRET` 缺失或密钥长度校验失败 | 按接口文档生成随机密钥，在同一终端设置，或放入被忽略的本地配置。 |
 | 端口 8080 被占用 | 改为 `$env:SERVER_PORT = '8081'`，启动后访问对应端口。 |
 | `Communications link failure`、连接拒绝或数据库接口 503 | 检查 MySQL 服务、DB_URL、3306 端口、网络和防火墙；使用数据库客户端验证同样的地址和凭据。 |
 | `Access denied for user` | 检查用户名、密码以及 MySQL 用户允许连接的主机；不要把密码或完整连接凭据贴到日志/仓库。 |

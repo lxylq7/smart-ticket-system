@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -49,7 +50,7 @@ class HealthIntegrationTest {
 
     @Test
     void unknownPathReturnsUnified404() throws Exception {
-        mockMvc.perform(get("/api/missing"))
+        mockMvc.perform(get("/api/missing").with(user("health-test")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
@@ -64,7 +65,7 @@ class HealthIntegrationTest {
 
     @Test
     void invalidBodyReturnsUnified400() throws Exception {
-        mockMvc.perform(post("/test/validation")
+        mockMvc.perform(post("/test/validation").with(user("health-test"))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
@@ -72,7 +73,7 @@ class HealthIntegrationTest {
 
     @Test
     void malformedJsonReturnsUnified400() throws Exception {
-        mockMvc.perform(post("/test/validation")
+        mockMvc.perform(post("/test/validation").with(user("health-test"))
                         .contentType(MediaType.APPLICATION_JSON).content("{"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
@@ -80,7 +81,7 @@ class HealthIntegrationTest {
 
     @Test
     void invalidParameterReturnsUnified400() throws Exception {
-        mockMvc.perform(get("/test/number").param("value", "abc"))
+        mockMvc.perform(get("/test/number").with(user("health-test")).param("value", "abc"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
