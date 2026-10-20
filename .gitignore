@@ -1,0 +1,14 @@
+# Build output and IDE files
+**/target/
+.idea/
+*.iml
+.vscode/
+*.log
+logs/
+
+# Local credentials and environment files
+.env
+.env.*
+!.env.example
+**/application-local.yml
+**/application-local.yaml
