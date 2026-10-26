@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { login } from '../api/auth'
 import { showApiError } from '../api/http'
-import { saveAuth } from '../utils/storage'
+import { getRoleHomeRoute, hasAnyRole, saveAuth } from '../utils/storage'
 
 const router = useRouter()
 const route = useRoute()
@@ -20,14 +20,27 @@ async function submit() {
   await formRef.value.validate()
   loading.value = true
   try {
-    saveAuth(await login(form))
+    const loginData = await login(form)
+    saveAuth(loginData)
     ElMessage.success('登录成功')
-    router.replace(typeof route.query.redirect === 'string' ? route.query.redirect : { name: 'home' })
+    router.replace(resolvePostLoginRoute(loginData.user))
   } catch (error) {
     showApiError(error, '登录失败，请检查账号和密码')
   } finally {
     loading.value = false
   }
+}
+
+function resolvePostLoginRoute(user) {
+  const redirect = route.query.redirect
+  if (typeof redirect !== 'string' || !redirect.startsWith('/') || redirect.startsWith('//')) {
+    return getRoleHomeRoute(user)
+  }
+
+  const resolved = router.resolve(redirect)
+  if (resolved.name === 'login' || resolved.name === 'forbidden') return getRoleHomeRoute(user)
+  if (resolved.meta.roles && !hasAnyRole(resolved.meta.roles)) return getRoleHomeRoute(user)
+  return { path: resolved.fullPath }
 }
 </script>
 

@@ -17,7 +17,7 @@ const navigation = computed(() => [
 function logout() {
   clearAuth()
   ElMessage.success('已退出登录')
-  router.push({ name: 'login' })
+  router.replace({ name: 'login' })
 }
 </script>
 
