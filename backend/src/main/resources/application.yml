@@ -24,6 +24,18 @@ spring:
   sql:
     init:
       mode: never
+  ai:
+    model:
+      chat: ${AI_CHAT_MODEL:none}
+    openai:
+      # Placeholder keeps Spring AI beans constructible while app.ai.enabled=false; never use it for real calls.
+      api-key: ${AI_API_KEY:disabled}
+      base-url: ${AI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${AI_MODEL:gpt-4o-mini}
+          temperature: ${AI_TEMPERATURE:0.0}
+          max-completion-tokens: ${AI_MAX_COMPLETION_TOKENS:300}
 
 mybatis-plus:
   configuration:
@@ -35,4 +47,9 @@ security:
   jwt:
     secret: ${JWT_SECRET}
     expiration-seconds: 3600
+
+app:
+  ai:
+    enabled: ${AI_ENABLED:false}
+    timeout: ${AI_TIMEOUT:15s}
 

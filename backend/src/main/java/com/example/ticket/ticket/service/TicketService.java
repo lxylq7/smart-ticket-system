@@ -18,6 +18,8 @@ import com.example.ticket.ticket.enums.TicketStatus;
 import com.example.ticket.ticket.mapper.TicketHistoryMapper;
 import com.example.ticket.ticket.mapper.TicketMapper;
 import com.example.ticket.ticket.vo.TicketView;
+import com.example.ticket.ai.TicketClassificationRequested;
+import org.springframework.context.ApplicationEventPublisher;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -30,11 +32,14 @@ public class TicketService {
     private final TicketMapper mapper;
     private final TicketHistoryMapper historyMapper;
     private final CurrentUser currentUser;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public TicketService(TicketMapper mapper, TicketHistoryMapper historyMapper, CurrentUser currentUser) {
+    public TicketService(TicketMapper mapper, TicketHistoryMapper historyMapper, CurrentUser currentUser,
+            ApplicationEventPublisher eventPublisher) {
         this.mapper = mapper;
         this.historyMapper = historyMapper;
         this.currentUser = currentUser;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -52,6 +57,7 @@ public class TicketService {
         ticket.setVersion(0);
         mapper.insert(ticket);
         historyMapper.insertCreated(ticket.getId(), user.id());
+        eventPublisher.publishEvent(new TicketClassificationRequested(ticket.getId()));
         return TicketView.from(mapper.selectById(ticket.getId()));
     }
 
@@ -98,6 +104,8 @@ public class TicketService {
             throw new ApiException(HttpStatus.CONFLICT, "TICKET_CONFLICT", "工单已发生变化，请刷新后重试");
         }
         historyMapper.insertUpdated(id, user.id());
+        // Editing the source text invalidates any previous classification; classify the new content after commit.
+        eventPublisher.publishEvent(new TicketClassificationRequested(id));
         return TicketView.from(mapper.selectById(id));
     }
 

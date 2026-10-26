@@ -2,7 +2,7 @@
 
 沿用 `Controller → Service → Mapper`。Service 处理业务、数据权限和事务，Mapper 执行 SQL。
 本文说明基础工单接口。分配和状态流转现已实现，见 [工单状态流转](ticket-workflow.md)。
-尚未提供注册、回复消息、AI 调用和前端。
+AI 分类现已实现，见 [AI 工单分类](ticket-ai.md)。尚未提供注册、回复消息和前端。
 
 ## 启动准备
 
@@ -41,7 +41,7 @@ JWT 使用 HS256，有效期 3600 秒。运行密钥无默认值，至少 32 字
 - Service 再次校验身份和角色，身份只来自 Spring Security 的认证信息。JWT 每次使用时重新读取账号状态和角色。
 - 创建仅接收标题、描述。默认优先级 `MEDIUM`、工单状态 `PENDING`、分类状态 `PENDING`，无分类、无处理人、version=0。
 - 工单编号为 32 位不带横线的 UUID，有数据库唯一索引。
-- 修改仅接收标题、描述、version。修改内容后清空旧分类、理由和 AI 错误，重置为 PENDING，不发起 AI 调用。
+- 修改仅接收标题、描述、version。修改内容后清空旧分类、理由和 AI 错误，重置为 PENDING；事务提交后由 AI 分类模块重新处理（AI 未启用时保持 PENDING）。
 - 未定义 JSON 字段返回 400；不能通过 creatorId、assigneeId、status 等注入身份或修改保护字段。
 - 查询参数不开放创建人、处理人的筛选；附带 userId、creatorId 不会改变数据权限。
 - 数据权限过滤、COUNT、LIMIT 均在数据库执行，按 `created_at DESC, id DESC` 稳定排序。
@@ -371,7 +371,7 @@ HealthIntegrationTest.java、根目录与后端 README。没有重构已完成�
 ## 已知限制
 
 - 没有注册、账号管理、修改密码、JWT 刷新和服务端主动登出；密码必须为 BCrypt 摘要。
-- 没有 AI、消息、附件接口；新工单的工单状态和分类状态均为 PENDING，工单可通过独立接口分配和流转。
+- 没有消息、附件接口；新工单的工单状态和分类状态均为 PENDING，工单可通过独立接口分配和流转，分类由 AI 模块异步处理。
 - 没有管理员代用户修改内容的能力。
 - 当前无请求幂等，重复提交会创建不同工单；标题搜索使用 LIKE。
 - 应用不会自动运行 SQL 脚本；部署时仍需确认 V2、V3 迁移已执行。

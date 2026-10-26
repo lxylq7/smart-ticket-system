@@ -4,7 +4,14 @@ spring:
     username: sa
     password: ""
     driver-class-name: org.h2.Driver
+  ai:
+    model:
+      chat: none
 
 security:
   jwt:
     secret: test-only-signing-secret-not-for-production-2026
+app:
+  ai:
+    enabled: false
+    timeout: 1s

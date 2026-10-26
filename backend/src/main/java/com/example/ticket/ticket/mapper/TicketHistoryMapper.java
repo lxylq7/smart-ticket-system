@@ -38,4 +38,16 @@ public interface TicketHistoryMapper {
             """)
     int insertStatusChanged(@Param("ticket") Ticket ticket, @Param("operatorId") long operatorId,
                             @Param("target") TicketStatus target, @Param("remark") String remark);
+
+    @Insert("""
+            INSERT INTO ticket_operation_history (ticket_id, operation_type, remark)
+            VALUES (#{ticketId}, 'AI_CLASSIFY', #{remark})
+            """)
+    int insertAiClassified(@Param("ticketId") long ticketId, @Param("remark") String remark);
+
+    @Insert("""
+            INSERT INTO ticket_operation_history (ticket_id, operation_type, remark)
+            VALUES (#{ticketId}, 'AI_CLASSIFY_FAILED', #{errorMessage})
+            """)
+    int insertAiClassificationFailed(@Param("ticketId") long ticketId, @Param("errorMessage") String errorMessage);
 }
