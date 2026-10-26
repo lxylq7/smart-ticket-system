@@ -1,0 +1,1 @@
+<template><div class="state-card"><span class="eyebrow">403 / FORBIDDEN</span><h2>暂时没有访问权限</h2><p>当前账号没有访问这个页面的角色。请返回工作台，或联系管理员。</p><RouterLink class="back-link" :to="{ name: 'home' }">返回工作台 →</RouterLink></div></template>
