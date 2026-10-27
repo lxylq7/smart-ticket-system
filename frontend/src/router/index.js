@@ -7,6 +7,8 @@ import ForbiddenView from '../views/ForbiddenView.vue'
 import UserTicketListView from '../views/user/UserTicketListView.vue'
 import UserTicketCreateView from '../views/user/UserTicketCreateView.vue'
 import UserTicketDetailView from '../views/user/UserTicketDetailView.vue'
+import AgentTicketListView from '../views/agent/AgentTicketListView.vue'
+import AgentTicketDetailView from '../views/agent/AgentTicketDetailView.vue'
 
 const routes = [
   { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
@@ -19,7 +21,8 @@ const routes = [
       { path: 'user', name: 'user-home', component: UserTicketListView, meta: { roles: ['USER'] } },
       { path: 'user/tickets/new', name: 'user-ticket-create', component: UserTicketCreateView, meta: { roles: ['USER'] } },
       { path: 'user/tickets/:id', name: 'user-ticket-detail', component: UserTicketDetailView, meta: { roles: ['USER'] } },
-      { path: 'agent', name: 'agent-home', component: HomeView, meta: { roles: ['AGENT'] } },
+      { path: 'agent', name: 'agent-home', component: AgentTicketListView, meta: { roles: ['AGENT'] } },
+      { path: 'agent/tickets/:id', name: 'agent-ticket-detail', component: AgentTicketDetailView, meta: { roles: ['AGENT'] } },
       { path: 'admin', name: 'admin-home', component: HomeView, meta: { roles: ['ADMIN'] } },
       { path: 'forbidden', name: 'forbidden', component: ForbiddenView },
     ],
