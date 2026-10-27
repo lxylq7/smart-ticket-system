@@ -5,7 +5,6 @@ import com.example.ticket.ai.DisabledTicketClassifier;
 import com.example.ticket.ai.SpringAiTicketClassifier;
 import com.example.ticket.ai.TicketClassifier;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -34,7 +33,6 @@ public class AiConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "app.ai", name = "enabled", havingValue = "true")
     @ConditionalOnProperty(name = "spring.ai.model.chat", havingValue = "openai")
-    @ConditionalOnBean(ChatClient.Builder.class)
     public TicketClassifier springAiTicketClassifier(ChatClient.Builder builder) {
         return new SpringAiTicketClassifier(builder.build());
     }
