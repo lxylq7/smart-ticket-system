@@ -44,3 +44,7 @@ export function listTicketMessages(id) {
 export function createTicketMessage(id, payload) {
   return http.post(`/tickets/${id}/messages`, payload)
 }
+
+export function listTicketHistory(id, params) {
+  return http.get(`/tickets/${id}/history`, { params })
+}

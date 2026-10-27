@@ -2,9 +2,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { changeTicketPriority, changeTicketStatus, createTicketMessage, getTicket, listTicketMessages } from '../../api/tickets'
+import { changeTicketPriority, changeTicketStatus, createTicketMessage, getTicket, listTicketHistory, listTicketMessages } from '../../api/tickets'
 import { showApiError } from '../../api/http'
 import TicketMessagePanel from '../../components/TicketMessagePanel.vue'
+import TicketHistoryPanel from '../../components/TicketHistoryPanel.vue'
 import {
   AI_STATUS_LABELS,
   TICKET_CATEGORY_LABELS,
@@ -28,6 +29,8 @@ const remark = ref('')
 const targetPriority = ref('')
 const priorityRemark = ref('')
 const prioritySaving = ref(false)
+const history = reactive({ records: [], total: 0, page: 1, size: 10 })
+const historyLoading = ref(false)
 const transitionLabels = Object.freeze({
   PROCESSING: '开始处理',
   WAITING_USER: '等待用户反馈',
@@ -42,12 +45,31 @@ async function loadTicket() {
   loading.value = true
   try {
     ticket.value = await getTicket(route.params.id)
-    await loadMessages()
+    await Promise.all([loadMessages(), loadHistory()])
   } catch (error) {
     showApiError(error, '工单详情加载失败，或该工单已不在你的授权范围内')
   } finally {
     loading.value = false
   }
+}
+
+async function loadHistory() {
+  if (!ticket.value) return
+  historyLoading.value = true
+  try {
+    const data = await listTicketHistory(ticket.value.id, { page: history.page, size: history.size })
+    history.records = data.records || []
+    history.total = data.total || 0
+  } catch (error) {
+    showApiError(error, '操作历史加载失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+function changeHistoryPage(page) {
+  history.page = page
+  loadHistory()
 }
 
 async function loadMessages() {
@@ -69,6 +91,7 @@ async function sendMessage(payload) {
     await createTicketMessage(ticket.value.id, payload)
     messagePanelRef.value?.clear()
     await loadMessages()
+    await loadHistory()
     ElMessage.success(payload.visibility === 'INTERNAL' ? '内部备注已保存' : '回复已发送')
   } catch (error) {
     showApiError(error, '消息发送失败，请稍后重试')
@@ -88,6 +111,7 @@ async function applyStatus() {
     })
     targetStatus.value = ''
     remark.value = ''
+    await loadHistory()
     ElMessage.success('工单状态已更新')
   } catch (error) {
     showApiError(error, '状态更新失败，工单可能已被其他人修改，请刷新后重试')
@@ -108,6 +132,7 @@ async function applyPriority() {
     })
     targetPriority.value = ''
     priorityRemark.value = ''
+    await loadHistory()
     ElMessage.success('工单优先级已更新')
   } catch (error) {
     showApiError(error, '优先级更新失败，工单可能已被其他人修改，请刷新后重试')
@@ -161,6 +186,7 @@ onMounted(loadTicket)
         </el-form>
       </el-card>
       <TicketMessagePanel ref="messagePanelRef" :messages="messages" :loading="messagesLoading" :sending="messageSending" allow-internal :disabled="ticket.status === 'CLOSED'" @send="sendMessage" />
+      <TicketHistoryPanel :records="history.records" :loading="historyLoading" :total="history.total" :page="history.page" :size="history.size" @page-change="changeHistoryPage" />
     </template>
   </div>
 </template>

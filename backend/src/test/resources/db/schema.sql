@@ -85,3 +85,4 @@ CREATE TABLE IF NOT EXISTS ticket_message (
 );
 CREATE INDEX IF NOT EXISTS idx_ticket_message_ticket_created ON ticket_message(ticket_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_ticket_message_ticket_visibility_created ON ticket_message(ticket_id, visibility, created_at);
+CREATE INDEX IF NOT EXISTS idx_ticket_history_ticket_created ON ticket_operation_history(ticket_id, created_at, id);

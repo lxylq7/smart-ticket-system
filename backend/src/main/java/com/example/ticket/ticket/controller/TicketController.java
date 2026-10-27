@@ -5,7 +5,10 @@ import com.example.ticket.common.response.PageResponse;
 import com.example.ticket.ticket.dto.CreateTicketRequest;
 import com.example.ticket.ticket.dto.TicketQuery;
 import com.example.ticket.ticket.dto.UpdateTicketRequest;
+import com.example.ticket.ticket.dto.TicketHistoryQuery;
 import com.example.ticket.ticket.service.TicketService;
+import com.example.ticket.ticket.service.TicketHistoryService;
+import com.example.ticket.ticket.vo.TicketOperationHistoryView;
 import com.example.ticket.ticket.vo.TicketView;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -26,8 +29,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class TicketController {
 
     private final TicketService service;
+    private final TicketHistoryService historyService;
 
-    public TicketController(TicketService service) { this.service = service; }
+    public TicketController(TicketService service, TicketHistoryService historyService) {
+        this.service = service;
+        this.historyService = historyService;
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -39,6 +46,12 @@ public class TicketController {
     @GetMapping("/{id}")
     public ApiResponse<TicketView> get(@PathVariable @Positive long id) {
         return ApiResponse.success(service.get(id));
+    }
+
+    @GetMapping("/{id}/history")
+    public ApiResponse<PageResponse<TicketOperationHistoryView>> history(@PathVariable @Positive long id,
+            @Valid @ModelAttribute TicketHistoryQuery query) {
+        return ApiResponse.success(historyService.page(id, query));
     }
 
     @GetMapping

@@ -3,9 +3,10 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { InfoFilled } from '@element-plus/icons-vue'
-import { createTicketMessage, getTicket, listTicketMessages, updateTicket } from '../../api/tickets'
+import { createTicketMessage, getTicket, listTicketHistory, listTicketMessages, updateTicket } from '../../api/tickets'
 import { showApiError } from '../../api/http'
 import TicketMessagePanel from '../../components/TicketMessagePanel.vue'
+import TicketHistoryPanel from '../../components/TicketHistoryPanel.vue'
 import {
   AI_STATUS_LABELS,
   TICKET_CATEGORY_LABELS,
@@ -24,6 +25,8 @@ const messages = ref([])
 const messagesLoading = ref(false)
 const messageSending = ref(false)
 const messagePanelRef = ref()
+const history = reactive({ records: [], total: 0, page: 1, size: 10 })
+const historyLoading = ref(false)
 const formRef = ref()
 const form = reactive({ title: '', description: '' })
 const rules = {
@@ -38,12 +41,31 @@ async function loadTicket() {
     ticket.value = await getTicket(route.params.id)
     form.title = ticket.value.title
     form.description = ticket.value.description
-    await loadMessages()
+    await Promise.all([loadMessages(), loadHistory()])
   } catch (error) {
     showApiError(error, '工单详情加载失败')
   } finally {
     loading.value = false
   }
+}
+
+async function loadHistory() {
+  if (!ticket.value) return
+  historyLoading.value = true
+  try {
+    const data = await listTicketHistory(ticket.value.id, { page: history.page, size: history.size })
+    history.records = data.records || []
+    history.total = data.total || 0
+  } catch (error) {
+    showApiError(error, '操作历史加载失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+function changeHistoryPage(page) {
+  history.page = page
+  loadHistory()
 }
 
 async function loadMessages() {
@@ -65,6 +87,7 @@ async function sendMessage(payload) {
     await createTicketMessage(ticket.value.id, payload)
     messagePanelRef.value?.clear()
     await loadMessages()
+    await loadHistory()
     ElMessage.success('回复已发送')
   } catch (error) {
     showApiError(error, '回复发送失败，请稍后重试')
@@ -81,6 +104,7 @@ async function save() {
     ticket.value = await updateTicket(ticket.value.id, { title: form.title.trim(), description: form.description.trim(), version: ticket.value.version })
     form.title = ticket.value.title
     form.description = ticket.value.description
+    await loadHistory()
     ElMessage.success('工单已更新')
   } catch (error) {
     showApiError(error, '工单更新失败，请刷新后重试')
@@ -122,6 +146,7 @@ onMounted(loadTicket)
       </el-card>
       <el-card v-else shadow="never" class="notice-card"><el-icon><InfoFilled /></el-icon><span>工单已进入处理流程，标题和描述暂不可修改。</span></el-card>
       <TicketMessagePanel ref="messagePanelRef" :messages="messages" :loading="messagesLoading" :sending="messageSending" :disabled="ticket.status === 'CLOSED'" @send="sendMessage" />
+      <TicketHistoryPanel :records="history.records" :loading="historyLoading" :total="history.total" :page="history.page" :size="history.size" @page-change="changeHistoryPage" />
     </template>
   </div>
 </template>
