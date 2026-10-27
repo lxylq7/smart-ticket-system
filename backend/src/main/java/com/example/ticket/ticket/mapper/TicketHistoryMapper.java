@@ -50,4 +50,13 @@ public interface TicketHistoryMapper {
             VALUES (#{ticketId}, 'AI_CLASSIFY_FAILED', #{errorMessage})
             """)
     int insertAiClassificationFailed(@Param("ticketId") long ticketId, @Param("errorMessage") String errorMessage);
+
+    @Insert("""
+            INSERT INTO ticket_operation_history (ticket_id, operator_id, operation_type, remark)
+            VALUES (#{ticketId}, #{operatorId},
+                CASE WHEN #{visibility} = 'PUBLIC' THEN 'PUBLIC_REPLY' ELSE 'INTERNAL_NOTE' END,
+                CASE WHEN #{visibility} = 'PUBLIC' THEN '发送公开回复' ELSE '添加内部备注' END)
+            """)
+    int insertMessageCreated(@Param("ticketId") long ticketId, @Param("operatorId") long operatorId,
+                             @Param("visibility") String visibility);
 }

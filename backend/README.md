@@ -8,6 +8,7 @@
 生成密钥、接口示例、文件清单和测试步骤见 [基础工单接口文档](docs/ticket-api.md)。
 状态规则、分配/状态接口、测试用例和迁移步骤见 [工单状态流转](docs/ticket-workflow.md)。
 AI 分类配置、重试、失败模拟和结果验证见 [AI 工单分类](docs/ticket-ai.md)。
+工单公开回复、内部备注和消息权限见 [工单消息接口](docs/ticket-messages.md)。
 
 ## 环境与版本
 

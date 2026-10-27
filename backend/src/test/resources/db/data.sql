@@ -1,3 +1,4 @@
+DELETE FROM ticket_message;
 DELETE FROM ticket_operation_history;
 DELETE FROM ticket;
 DELETE FROM sys_user_role;

@@ -32,3 +32,11 @@ export function changeTicketStatus(id, payload) {
 export function retryTicketClassification(id) {
   return http.post(`/tickets/${id}/classification/retry`)
 }
+
+export function listTicketMessages(id) {
+  return http.get(`/tickets/${id}/messages`)
+}
+
+export function createTicketMessage(id, payload) {
+  return http.post(`/tickets/${id}/messages`, payload)
+}
