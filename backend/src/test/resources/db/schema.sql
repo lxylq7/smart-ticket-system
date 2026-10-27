@@ -4,7 +4,12 @@ CREATE TABLE IF NOT EXISTS sys_user (
     username VARCHAR(64) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     display_name VARCHAR(64) NOT NULL,
+    email VARCHAR(255),
+    phone VARCHAR(32),
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    last_login_at TIMESTAMP(3),
+    created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     CHECK (status IN ('ACTIVE', 'DISABLED'))
 );
 CREATE TABLE IF NOT EXISTS sys_role (

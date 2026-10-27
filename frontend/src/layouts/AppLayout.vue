@@ -34,7 +34,7 @@ function logout() {
     </aside>
     <main class="main-panel">
       <header class="top-bar">
-        <div><span class="eyebrow">TICKET OPERATIONS</span><h1>工作台</h1></div>
+        <div><span class="eyebrow">TICKET OPERATIONS</span><h1>{{ route.name === 'admin-home' ? '管理员工作台' : '工作台' }}</h1></div>
         <div class="user-menu"><div class="avatar">{{ user?.username?.slice(0, 1)?.toUpperCase() }}</div><div><strong>{{ user?.username }}</strong><small>{{ user?.roles?.join(' · ') }}</small></div><el-button text @click="logout">退出</el-button></div>
       </header>
       <section class="content-area"><RouterView /></section>
