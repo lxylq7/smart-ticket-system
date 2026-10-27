@@ -20,5 +20,12 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    test: {
+      environment: 'jsdom',
+      environmentOptions: {
+        jsdom: { url: 'http://localhost' },
+      },
+      clearMocks: true,
+    },
   }
 })

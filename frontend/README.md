@@ -29,3 +29,26 @@ npm run preview
 
 当前已提供登录、角色工作区、USER 普通用户工单页面和 AGENT 客服工作台。
 USER 和 AGENT 的工单详情页已接入真实消息接口：USER 发送公开回复，AGENT 可发送公开回复或内部备注；消息列表按后端权限返回，不使用写死数据。
+
+## 测试与部署
+
+运行前端单元测试：
+
+```powershell
+npm test
+```
+
+构建生产产物：
+
+```powershell
+npm run build
+```
+
+也可以使用 Docker 构建 Nginx 静态站点：
+
+```powershell
+docker build -t smart-ticket-frontend .
+docker run --rm -p 5173:80 --add-host=backend:host-gateway smart-ticket-frontend
+```
+
+容器内 Nginx 会把 `/api` 转发到名为 `backend` 的 8080 服务，并使用 history fallback 支持 Vue Router 刷新。
