@@ -29,6 +29,10 @@ export function changeTicketStatus(id, payload) {
   return http.put(`/tickets/${id}/status`, payload)
 }
 
+export function changeTicketPriority(id, payload) {
+  return http.put(`/tickets/${id}/priority`, payload)
+}
+
 export function retryTicketClassification(id) {
   return http.post(`/tickets/${id}/classification/retry`)
 }

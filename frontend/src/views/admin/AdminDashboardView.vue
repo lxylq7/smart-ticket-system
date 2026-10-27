@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { assignTicket, listTickets } from '../../api/tickets'
+import { assignTicket, changeTicketPriority, listTickets } from '../../api/tickets'
 import { createAdminUser, getAdminStats, listAdminUsers, updateAdminUserStatus } from '../../api/admin'
 import { showApiError } from '../../api/http'
 import {
@@ -132,6 +132,18 @@ async function assign(row, assigneeId) {
   }
 }
 
+async function changePriority(row, priority) {
+  if (!priority || priority === row.priority) return
+  try {
+    await changeTicketPriority(row.id, { priority, version: row.version, remark: '管理员调整工单优先级' })
+    ElMessage.success('工单优先级已更新')
+    await Promise.all([loadStats(), loadTickets()])
+  } catch (error) {
+    showApiError(error, '优先级更新失败，工单可能已被其他人修改')
+    await loadTickets()
+  }
+}
+
 async function toggleUserStatus(row) {
   const nextStatus = row.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE'
   try {
@@ -201,6 +213,7 @@ onMounted(refreshAll)
         <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
         <el-table-column label="分类" width="110"><template #default="{ row }">{{ labelOf(TICKET_CATEGORY_LABELS, row.category) }}</template></el-table-column>
         <el-table-column label="状态" width="105"><template #default="{ row }"><el-tag :type="statusTagType(row.status)">{{ labelOf(TICKET_STATUS_LABELS, row.status) }}</el-tag></template></el-table-column>
+        <el-table-column label="优先级" width="125"><template #default="{ row }"><el-select v-if="row.status !== 'CLOSED'" :model-value="row.priority" @change="value => changePriority(row, value)"><el-option v-for="(label, value) in TICKET_PRIORITY_LABELS" :key="value" :label="label" :value="value" /></el-select><span v-else>{{ labelOf(TICKET_PRIORITY_LABELS, row.priority) }}</span></template></el-table-column>
         <el-table-column label="处理人" min-width="180">
           <template #default="{ row }">
             <el-select v-if="row.status !== 'CLOSED' && row.status !== 'RESOLVED'" :model-value="row.assigneeId || ''" clearable placeholder="选择客服" @change="value => assign(row, value)">

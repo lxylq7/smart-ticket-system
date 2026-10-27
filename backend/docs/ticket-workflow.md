@@ -1,7 +1,7 @@
 # 工单分配与状态流转
 
 本阶段沿用现有 Controller、Service、Mapper、JWT 及统一异常结构。
-没有增加消息、AI、优先级修改、用户管理或自动任务。
+没有增加消息、AI、用户管理或自动任务；本阶段补充优先级修改。
 
 ## 状态与权限
 
@@ -97,6 +97,23 @@ RESOLVED 时写入 resolvedAt；重新处理时清空 resolvedAt；CLOSED 时写
 旧的创建、详情、分页、修改内容接口同步返回这两个新增时间字段。
 只有 PENDING 且未分配的工单仍允许原创建人修改标题和描述。
 
+### 修改工单优先级
+
+`PUT /api/tickets/{id}/priority`
+
+```json
+{
+  "priority": "URGENT",
+  "version": 2,
+  "remark": "用户影响范围扩大"
+}
+```
+
+priority 必填，取值为 `LOW`、`MEDIUM`、`HIGH`、`URGENT`。ADMIN 可以修改所有未关闭工单；
+AGENT 只能修改当前分配给自己的未关闭工单；USER 不能修改优先级。version 必须取最近响应中的版本号，
+成功后版本号增加 1。重复设置相同优先级、关闭工单、旧版本或无权访问都会失败。
+修改与 `PRIORITY_CHANGE` 操作历史在同一事务中提交。
+
 ### 错误响应
 
 | HTTP | code | 场景 |
@@ -110,6 +127,8 @@ RESOLVED 时写入 resolvedAt；重新处理时清空 resolvedAt；CLOSED 时写
 | 409 | TICKET_ALREADY_ASSIGNED | 分配给当前同一客服 |
 | 409 | TICKET_CONFLICT | 旧版本或读后更新时工单已经改变 |
 | 409 | TICKET_NOT_ASSIGNED | 遗留异常数据无处理人，无法开始流转 |
+| 409 | TICKET_CLOSED | 已关闭工单不能修改优先级 |
+| 409 | TICKET_PRIORITY_UNCHANGED | 新优先级与当前优先级相同 |
 | 503 | DATABASE_UNAVAILABLE | 数据库失败，包括历史写入失败；本次更新整体回滚 |
 
 错误 data 为 null。优先校验权限，避免泄露无权访问工单的状态。

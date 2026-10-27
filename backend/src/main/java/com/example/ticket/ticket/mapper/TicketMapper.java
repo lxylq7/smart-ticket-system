@@ -5,6 +5,7 @@ import com.example.ticket.ticket.dto.UpdateTicketRequest;
 import com.example.ticket.ticket.entity.Ticket;
 import com.example.ticket.ticket.enums.TicketStatus;
 import com.example.ticket.ticket.enums.TicketCategory;
+import com.example.ticket.ticket.enums.TicketPriority;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
@@ -61,6 +62,19 @@ public interface TicketMapper extends BaseMapper<Ticket> {
     int changeStatus(@Param("ticket") Ticket ticket, @Param("target") TicketStatus target,
                      @Param("version") int version, @Param("operatorId") long operatorId,
                      @Param("admin") boolean admin);
+
+    @Update("""
+            <script>
+            UPDATE ticket SET priority = #{target}, version = version + 1,
+                updated_at = CURRENT_TIMESTAMP(3)
+            WHERE id = #{ticket.id} AND version = #{version}
+                AND priority = #{ticket.priority} AND status &lt;&gt; 'CLOSED'
+                <if test="!admin">AND assignee_id = #{operatorId}</if>
+            </script>
+            """)
+    int changePriority(@Param("ticket") Ticket ticket, @Param("target") TicketPriority target,
+                       @Param("version") int version, @Param("operatorId") long operatorId,
+                       @Param("admin") boolean admin);
 
     @Update("""
             UPDATE ticket SET ai_attempts = ai_attempts + 1,

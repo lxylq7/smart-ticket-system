@@ -6,8 +6,10 @@ import com.example.ticket.security.CurrentUser;
 import com.example.ticket.security.UserRole;
 import com.example.ticket.ticket.dto.AssignTicketRequest;
 import com.example.ticket.ticket.dto.ChangeTicketStatusRequest;
+import com.example.ticket.ticket.dto.ChangeTicketPriorityRequest;
 import com.example.ticket.ticket.entity.Ticket;
 import com.example.ticket.ticket.enums.TicketStatus;
+import com.example.ticket.ticket.enums.TicketPriority;
 import com.example.ticket.ticket.mapper.TicketHistoryMapper;
 import com.example.ticket.ticket.mapper.TicketMapper;
 import com.example.ticket.ticket.vo.TicketView;
@@ -68,6 +70,26 @@ public class TicketWorkflowService {
             throw conflict();
         }
         historyMapper.insertStatusChanged(ticket, user.id(), request.status(), normalize(request.remark()));
+        return TicketView.from(mapper.selectById(id));
+    }
+
+    @Transactional
+    public TicketView changePriority(long id, ChangeTicketPriorityRequest request) {
+        AuthenticatedUser user = currentUser.require();
+        boolean admin = user.hasRole(UserRole.ADMIN);
+        require(admin || user.hasRole(UserRole.AGENT), HttpStatus.FORBIDDEN, "FORBIDDEN", "用户不能修改工单优先级");
+        Ticket ticket = find(id);
+        require(admin || Objects.equals(ticket.getAssigneeId(), user.id()), HttpStatus.NOT_FOUND,
+                "TICKET_NOT_FOUND", "工单不存在或无权访问");
+        require(ticket.getStatus() != TicketStatus.CLOSED, HttpStatus.CONFLICT,
+                "TICKET_CLOSED", "已关闭工单不能修改优先级");
+        require(ticket.getPriority() != request.priority(), HttpStatus.CONFLICT,
+                "TICKET_PRIORITY_UNCHANGED", "工单已经是该优先级");
+        checkVersion(ticket, request.version());
+        if (mapper.changePriority(ticket, request.priority(), request.version(), user.id(), admin) != 1) {
+            throw conflict();
+        }
+        historyMapper.insertPriorityChanged(ticket, user.id(), request.priority(), normalize(request.remark()));
         return TicketView.from(mapper.selectById(id));
     }
 

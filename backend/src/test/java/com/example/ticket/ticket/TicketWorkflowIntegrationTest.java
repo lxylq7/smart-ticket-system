@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.ticket.ticket.entity.Ticket;
 import com.example.ticket.ticket.enums.TicketStatus;
+import com.example.ticket.ticket.enums.TicketPriority;
 import com.example.ticket.ticket.mapper.TicketHistoryMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
@@ -147,6 +148,53 @@ class TicketWorkflowIntegrationTest {
         mvc.perform(put("/api/tickets/101/assignment").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"assigneeId\":3,\"version\":0}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void assignedAgentAndAdminCanChangePriorityAndHistoryIsSaved() throws Exception {
+        changePriority(103, login("agent"), "HIGH", 0, 200);
+        assertThat(jdbc.queryForMap("SELECT priority, version FROM ticket WHERE id = 103"))
+                .containsEntry("PRIORITY", "HIGH").containsEntry("VERSION", 1);
+        assertThat(jdbc.queryForMap("SELECT operation_type, operator_id, from_priority, to_priority, remark "
+                + "FROM ticket_operation_history WHERE ticket_id = 103"))
+                .containsEntry("OPERATION_TYPE", "PRIORITY_CHANGE").containsEntry("OPERATOR_ID", 3L)
+                .containsEntry("FROM_PRIORITY", "MEDIUM").containsEntry("TO_PRIORITY", "HIGH")
+                .containsEntry("REMARK", "优先级测试");
+        changePriority(101, login("admin"), "URGENT", 0, 200);
+        assertThat(jdbc.queryForObject("SELECT priority FROM ticket WHERE id = 101", String.class))
+                .isEqualTo("URGENT");
+    }
+
+    @Test
+    void usersOtherAgentsClosedTicketsAndStaleVersionsCannotChangePriority() throws Exception {
+        changePriority(103, login("alice"), "HIGH", 0, 403);
+        changePriority(104, login("agent"), "HIGH", 0, 404);
+        jdbc.update("UPDATE ticket SET status = 'CLOSED' WHERE id = 105");
+        changePriority(105, login("admin"), "URGENT", 0, 409);
+        changePriority(103, login("agent"), "HIGH", 9, 409);
+        assertThat(historyCount(103) + historyCount(104) + historyCount(105)).isZero();
+    }
+
+    @Test
+    void priorityRequestValidationRejectsUnknownMissingAndOversizedValues() throws Exception {
+        String admin = login("admin");
+        for (String body : List.of("{}", "{\"priority\":\"INVALID\",\"version\":0}",
+                "{\"priority\":\"HIGH\"}",
+                json.writeValueAsString(Map.of("priority", "HIGH", "version", 0, "remark", "x".repeat(501))))) {
+            send("/api/tickets/101/priority", admin, body, 400);
+        }
+        assertThat(historyCount(101)).isZero();
+    }
+
+    @Test
+    void concurrentPriorityChangesHaveOneWinnerAndOneAuditRecord() throws Exception {
+        String admin = login("admin");
+        race(() -> changePriority(101, admin, "HIGH", 0, 0),
+                () -> changePriority(101, admin, "URGENT", 0, 0));
+        assertThat(historyCount(101)).isEqualTo(1);
+        assertThat(version(101)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT to_priority FROM ticket_operation_history WHERE ticket_id = 101",
+                String.class)).isEqualTo(jdbc.queryForObject("SELECT priority FROM ticket WHERE id = 101", String.class));
     }
 
     @Test
@@ -320,6 +368,11 @@ class TicketWorkflowIntegrationTest {
     private int change(long id, String token, String target, int version, int expected) throws Exception {
         return send("/api/tickets/" + id + "/status", token,
                 json.writeValueAsString(Map.of("status", target, "version", version, "remark", "状态测试")), expected);
+    }
+
+    private int changePriority(long id, String token, String target, int version, int expected) throws Exception {
+        return send("/api/tickets/" + id + "/priority", token,
+                json.writeValueAsString(Map.of("priority", target, "version", version, "remark", "优先级测试")), expected);
     }
 
     private int send(String path, String token, String body, int expected) throws Exception {

@@ -3,6 +3,7 @@ package com.example.ticket.ticket.controller;
 import com.example.ticket.common.response.ApiResponse;
 import com.example.ticket.ticket.dto.AssignTicketRequest;
 import com.example.ticket.ticket.dto.ChangeTicketStatusRequest;
+import com.example.ticket.ticket.dto.ChangeTicketPriorityRequest;
 import com.example.ticket.ticket.service.TicketWorkflowService;
 import com.example.ticket.ai.TicketClassificationService;
 import com.example.ticket.ticket.vo.TicketView;
@@ -40,6 +41,13 @@ public class TicketWorkflowController {
     public ApiResponse<TicketView> changeStatus(@PathVariable @Positive long id,
             @Valid @RequestBody ChangeTicketStatusRequest request) {
         return ApiResponse.success(service.changeStatus(id, request));
+    }
+
+    @PutMapping("/{id}/priority")
+    @PreAuthorize("hasAnyRole('ADMIN', 'AGENT')")
+    public ApiResponse<TicketView> changePriority(@PathVariable @Positive long id,
+            @Valid @RequestBody ChangeTicketPriorityRequest request) {
+        return ApiResponse.success(service.changePriority(id, request));
     }
 
     @PostMapping("/{id}/classification/retry")

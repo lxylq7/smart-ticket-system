@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { changeTicketStatus, createTicketMessage, getTicket, listTicketMessages } from '../../api/tickets'
+import { changeTicketPriority, changeTicketStatus, createTicketMessage, getTicket, listTicketMessages } from '../../api/tickets'
 import { showApiError } from '../../api/http'
 import TicketMessagePanel from '../../components/TicketMessagePanel.vue'
 import {
@@ -25,6 +25,9 @@ const messageSending = ref(false)
 const messagePanelRef = ref()
 const targetStatus = ref('')
 const remark = ref('')
+const targetPriority = ref('')
+const priorityRemark = ref('')
+const prioritySaving = ref(false)
 const transitionLabels = Object.freeze({
   PROCESSING: '开始处理',
   WAITING_USER: '等待用户反馈',
@@ -94,6 +97,26 @@ async function applyStatus() {
   }
 }
 
+async function applyPriority() {
+  if (!targetPriority.value || !ticket.value) return
+  prioritySaving.value = true
+  try {
+    ticket.value = await changeTicketPriority(ticket.value.id, {
+      priority: targetPriority.value,
+      version: ticket.value.version,
+      remark: priorityRemark.value.trim() || null,
+    })
+    targetPriority.value = ''
+    priorityRemark.value = ''
+    ElMessage.success('工单优先级已更新')
+  } catch (error) {
+    showApiError(error, '优先级更新失败，工单可能已被其他人修改，请刷新后重试')
+    await loadTicket()
+  } finally {
+    prioritySaving.value = false
+  }
+}
+
 function statusTagType(status) {
   return { PENDING: 'info', ASSIGNED: '', PROCESSING: 'warning', WAITING_USER: 'warning', RESOLVED: 'success', CLOSED: 'success' }[status] || 'info'
 }
@@ -128,6 +151,14 @@ onMounted(loadTicket)
           </el-form>
         </template>
         <el-empty v-else description="当前状态没有客服可执行的下一步操作" />
+      </el-card>
+      <el-card v-if="ticket.status !== 'CLOSED'" shadow="never" class="form-card">
+        <template #header><div class="card-header"><strong>调整优先级</strong><span>只有管理员或当前处理客服可以修改</span></div></template>
+        <el-form label-position="top" @submit.prevent="applyPriority">
+          <el-form-item label="优先级"><el-select v-model="targetPriority" placeholder="请选择优先级"><el-option v-for="(label, value) in TICKET_PRIORITY_LABELS" :key="value" :label="label" :value="value" /></el-select></el-form-item>
+          <el-form-item label="调整说明"><el-input v-model="priorityRemark" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="可选，记录调整优先级的原因" /></el-form-item>
+          <div class="form-actions"><el-button type="primary" :disabled="!targetPriority || targetPriority === ticket.priority" :loading="prioritySaving" native-type="submit">保存优先级</el-button></div>
+        </el-form>
       </el-card>
       <TicketMessagePanel ref="messagePanelRef" :messages="messages" :loading="messagesLoading" :sending="messageSending" allow-internal :disabled="ticket.status === 'CLOSED'" @send="sendMessage" />
     </template>

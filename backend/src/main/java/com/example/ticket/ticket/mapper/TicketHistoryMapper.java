@@ -2,6 +2,7 @@ package com.example.ticket.ticket.mapper;
 
 import com.example.ticket.ticket.entity.Ticket;
 import com.example.ticket.ticket.enums.TicketStatus;
+import com.example.ticket.ticket.enums.TicketPriority;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
 
@@ -38,6 +39,14 @@ public interface TicketHistoryMapper {
             """)
     int insertStatusChanged(@Param("ticket") Ticket ticket, @Param("operatorId") long operatorId,
                             @Param("target") TicketStatus target, @Param("remark") String remark);
+
+    @Insert("""
+            INSERT INTO ticket_operation_history
+                (ticket_id, operator_id, operation_type, from_priority, to_priority, remark)
+            VALUES (#{ticket.id}, #{operatorId}, 'PRIORITY_CHANGE', #{ticket.priority}, #{target}, #{remark})
+            """)
+    int insertPriorityChanged(@Param("ticket") Ticket ticket, @Param("operatorId") long operatorId,
+                              @Param("target") TicketPriority target, @Param("remark") String remark);
 
     @Insert("""
             INSERT INTO ticket_operation_history (ticket_id, operation_type, remark)
