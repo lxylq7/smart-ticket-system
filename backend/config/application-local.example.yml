@@ -5,3 +5,21 @@ spring:
     url: "jdbc:mysql://localhost:3306/smart_ticket?useUnicode=true&characterEncoding=UTF-8&connectionTimeZone=UTC&connectTimeout=5000&socketTimeout=5000"
     username: "REPLACE_WITH_LOCAL_USERNAME"
     password: "REPLACE_WITH_LOCAL_PASSWORD"
+
+  # AI is disabled by default. Set AI_ENABLED=true only after providing a real key.
+  ai:
+    model:
+      chat: "${AI_CHAT_MODEL:none}"
+    openai:
+      api-key: "${AI_API_KEY:disabled}"
+      base-url: "${AI_BASE_URL:https://api.openai.com}"
+      chat:
+        options:
+          model: "${AI_MODEL:gpt-4o-mini}"
+          temperature: "${AI_TEMPERATURE:0.0}"
+          max-completion-tokens: "${AI_MAX_COMPLETION_TOKENS:300}"
+
+app:
+  ai:
+    enabled: "${AI_ENABLED:false}"
+    timeout: "${AI_TIMEOUT:15s}"
