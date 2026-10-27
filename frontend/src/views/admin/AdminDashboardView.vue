@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { assignTicket, changeTicketPriority, listTickets } from '../../api/tickets'
 import { createAdminUser, getAdminStats, listAdminUsers, updateAdminUserStatus } from '../../api/admin'
@@ -14,6 +15,7 @@ import {
 import { getUser } from '../../utils/storage'
 
 const loading = ref(false)
+const router = useRouter()
 const ticketLoading = ref(false)
 const userLoading = ref(false)
 const createDialogVisible = ref(false)
@@ -182,6 +184,7 @@ function searchTickets() { ticketQuery.page = 1; loadTickets() }
 function searchUsers() { userQuery.page = 1; loadUsers() }
 function resetTicketFilters() { Object.assign(ticketQuery, { page: 1, keyword: '', status: '', priority: '', category: '' }); loadTickets() }
 function resetUserFilters() { Object.assign(userQuery, { page: 1, keyword: '', role: '', status: '' }); loadUsers() }
+function openTicket(row) { router.push({ name: 'admin-ticket-detail', params: { id: row.id } }) }
 
 onMounted(refreshAll)
 </script>
@@ -223,6 +226,7 @@ onMounted(refreshAll)
           </template>
         </el-table-column>
         <el-table-column label="更新时间" width="170"><template #default="{ row }">{{ formatDate(row.updatedAt) }}</template></el-table-column>
+        <el-table-column label="操作" width="90" fixed="right"><template #default="{ row }"><el-button link type="primary" @click="openTicket(row)">详情</el-button></template></el-table-column>
       </el-table>
       <div class="table-footer"><span>共 {{ tickets.total }} 条</span><el-pagination v-model:current-page="ticketQuery.page" v-model:page-size="ticketQuery.size" :page-sizes="[10, 20, 50]" layout="sizes, prev, pager, next" :total="tickets.total" @current-change="loadTickets" @size-change="searchTickets" /></div>
     </el-card>

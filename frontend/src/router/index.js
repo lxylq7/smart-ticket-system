@@ -10,6 +10,7 @@ import UserTicketDetailView from '../views/user/UserTicketDetailView.vue'
 import AgentTicketListView from '../views/agent/AgentTicketListView.vue'
 import AgentTicketDetailView from '../views/agent/AgentTicketDetailView.vue'
 import AdminDashboardView from '../views/admin/AdminDashboardView.vue'
+import AdminTicketDetailView from '../views/admin/AdminTicketDetailView.vue'
 
 const routes = [
   { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
@@ -25,6 +26,7 @@ const routes = [
       { path: 'agent', name: 'agent-home', component: AgentTicketListView, meta: { roles: ['AGENT'] } },
       { path: 'agent/tickets/:id', name: 'agent-ticket-detail', component: AgentTicketDetailView, meta: { roles: ['AGENT'] } },
       { path: 'admin', name: 'admin-home', component: AdminDashboardView, meta: { roles: ['ADMIN'] } },
+      { path: 'admin/tickets/:id', name: 'admin-ticket-detail', component: AdminTicketDetailView, meta: { roles: ['ADMIN'] } },
       { path: 'forbidden', name: 'forbidden', component: ForbiddenView },
     ],
   },
