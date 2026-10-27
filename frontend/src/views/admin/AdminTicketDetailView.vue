@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { assignTicket, changeTicketPriority, changeTicketStatus, createTicketMessage, getTicket, listTicketHistory, listTicketMessages } from '../../api/tickets'
+import { assignTicket, changeTicketPriority, changeTicketStatus, createTicketMessage, getTicket, listTicketHistory, listTicketMessages, retryTicketClassification } from '../../api/tickets'
 import { listAdminUsers } from '../../api/admin'
 import { showApiError } from '../../api/http'
 import TicketHistoryPanel from '../../components/TicketHistoryPanel.vue'
@@ -29,6 +29,7 @@ const assignmentRemark = ref('')
 const messagePanelRef = ref()
 const history = ref({ records: [], total: 0, page: 1, size: 10 })
 const historyLoading = ref(false)
+const retrying = ref(false)
 
 const transitionLabels = Object.freeze({ PROCESSING: '开始处理', WAITING_USER: '等待用户反馈', RESOLVED: '标记为已解决', CLOSED: '关闭工单' })
 const transitions = computed(() => {
@@ -104,6 +105,20 @@ async function applyPriority() {
   } catch (error) { showApiError(error, '优先级更新失败，工单可能已被其他人修改'); await loadTicket() } finally { prioritySaving.value = false }
 }
 
+async function retryClassification() {
+  if (!ticket.value) return
+  retrying.value = true
+  try {
+    ticket.value = await retryTicketClassification(ticket.value.id)
+    await loadHistory()
+    ElMessage.success('已提交重新分类请求')
+  } catch (error) {
+    showApiError(error, '重新分类失败，请稍后重试')
+  } finally {
+    retrying.value = false
+  }
+}
+
 async function sendMessage(payload) {
   if (!ticket.value) return
   messageSending.value = true
@@ -126,7 +141,7 @@ onMounted(loadTicket)
       <el-card shadow="never" class="detail-card">
         <div class="detail-header"><div><h3>{{ ticket.title }}</h3><div class="detail-tags"><el-tag :type="statusTagType(ticket.status)">{{ labelOf(TICKET_STATUS_LABELS, ticket.status) }}</el-tag><el-tag effect="plain">{{ labelOf(TICKET_PRIORITY_LABELS, ticket.priority) }}</el-tag><el-tag effect="plain">{{ labelOf(AI_STATUS_LABELS, ticket.aiStatus) }}</el-tag></div></div><span class="detail-version">版本 {{ ticket.version }}</span></div>
         <div class="detail-grid"><div><span>分类</span><strong>{{ labelOf(TICKET_CATEGORY_LABELS, ticket.category) }}</strong></div><div><span>创建人</span><strong>#{{ ticket.creatorId }}</strong></div><div><span>处理人</span><strong>{{ ticket.assigneeId ? `#${ticket.assigneeId}` : '待分配' }}</strong></div><div><span>更新时间</span><strong>{{ formatDate(ticket.updatedAt) }}</strong></div></div>
-        <div class="description-block"><span>问题描述</span><p>{{ ticket.description }}</p></div><el-alert v-if="ticket.categoryReason" title="AI 分类理由" :description="ticket.categoryReason" type="info" :closable="false" show-icon />
+        <div class="description-block"><span>问题描述</span><p>{{ ticket.description }}</p></div><el-alert v-if="ticket.categoryReason" title="AI 分类理由" :description="ticket.categoryReason" type="info" :closable="false" show-icon /><div v-if="ticket.aiStatus === 'FAILED'" class="detail-actions"><el-button type="warning" plain :loading="retrying" @click="retryClassification">重新分类</el-button></div>
       </el-card>
       <el-card shadow="never" class="form-card"><template #header><div class="card-header"><strong>分配处理人</strong><span>仅启用客服账号可被分配</span></div></template><el-form label-position="top" @submit.prevent="applyAssignment"><el-form-item label="客服"><el-select v-model="selectedAssignee" placeholder="选择客服" :disabled="ticket.status === 'CLOSED' || ticket.status === 'RESOLVED'"><el-option v-for="agent in agents" :key="agent.id" :label="`${agent.displayName || agent.username}（${agent.username}）`" :value="agent.id" /></el-select></el-form-item><el-form-item label="分配说明"><el-input v-model="assignmentRemark" maxlength="500" placeholder="可选" /></el-form-item><div class="form-actions"><el-button type="primary" :disabled="!selectedAssignee || Number(selectedAssignee) === Number(ticket.assigneeId)" :loading="assignmentSaving" native-type="submit">保存分配</el-button></div></el-form></el-card>
       <el-card v-if="transitions.length" shadow="never" class="form-card"><template #header><div class="card-header"><strong>状态流转</strong><span>管理员可执行完整状态流程</span></div></template><el-form label-position="top" @submit.prevent="applyStatus"><el-form-item label="下一状态"><el-select v-model="targetStatus" placeholder="请选择处理动作"><el-option v-for="item in transitions" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item><el-form-item label="处理说明"><el-input v-model="statusRemark" type="textarea" :rows="3" maxlength="500" /></el-form-item><div class="form-actions"><el-button type="primary" :disabled="!targetStatus" :loading="saving" native-type="submit">提交状态变更</el-button></div></el-form></el-card>

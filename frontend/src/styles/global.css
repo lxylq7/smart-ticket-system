@@ -30,5 +30,6 @@ button, input { font: inherit; }
 .admin-stat-card strong { margin-top: 18px; font-size: 28px; letter-spacing: -.03em; }
 .admin-stat-card.tone-blue strong { color: #3779bb; }.admin-stat-card.tone-orange strong { color: #d78c31; }.admin-stat-card.tone-purple strong { color: #8563bb; }.admin-stat-card.tone-green strong { color: #3a9b78; }.admin-stat-card.tone-teal strong { color: #2e9ca1; }.admin-stat-card.tone-red strong { color: #ce6670; }
 .admin-card { overflow: hidden; }.admin-card .el-card__header { padding: 18px 20px; }.admin-card .el-card__body { padding: 0 20px 2px; }.admin-card .el-form { padding-top: 14px; }.admin-card .el-form-item { margin-bottom: 14px; }.admin-card .el-select { min-width: 130px; }.muted-text { color: #8b99a9; font-size: 12px; }
+.detail-actions { display: flex; justify-content: flex-end; padding: 0 22px 22px; }
 @media (max-width: 1100px) { .admin-stat-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 800px) { .admin-stat-grid { grid-template-columns: repeat(2, 1fr); }.admin-card .el-card__body { overflow-x: auto; }.admin-card .el-table { min-width: 840px; } }

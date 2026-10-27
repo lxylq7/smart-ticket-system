@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { InfoFilled } from '@element-plus/icons-vue'
-import { createTicketMessage, getTicket, listTicketHistory, listTicketMessages, updateTicket } from '../../api/tickets'
+import { createTicketMessage, getTicket, listTicketHistory, listTicketMessages, retryTicketClassification, updateTicket } from '../../api/tickets'
 import { showApiError } from '../../api/http'
 import TicketMessagePanel from '../../components/TicketMessagePanel.vue'
 import TicketHistoryPanel from '../../components/TicketHistoryPanel.vue'
@@ -27,6 +27,7 @@ const messageSending = ref(false)
 const messagePanelRef = ref()
 const history = reactive({ records: [], total: 0, page: 1, size: 10 })
 const historyLoading = ref(false)
+const retrying = ref(false)
 const formRef = ref()
 const form = reactive({ title: '', description: '' })
 const rules = {
@@ -113,6 +114,20 @@ async function save() {
   }
 }
 
+async function retryClassification() {
+  if (!ticket.value) return
+  retrying.value = true
+  try {
+    ticket.value = await retryTicketClassification(ticket.value.id)
+    await loadHistory()
+    ElMessage.success('已提交重新分类请求')
+  } catch (error) {
+    showApiError(error, '重新分类失败，请稍后重试')
+  } finally {
+    retrying.value = false
+  }
+}
+
 function statusTagType(status) {
   return { PENDING: 'info', ASSIGNED: '', PROCESSING: 'warning', WAITING_USER: 'warning', RESOLVED: 'success', CLOSED: 'success' }[status] || 'info'
 }
@@ -134,6 +149,7 @@ onMounted(loadTicket)
         </div>
         <div class="detail-grid"><div><span>分类</span><strong>{{ labelOf(TICKET_CATEGORY_LABELS, ticket.category) }}</strong></div><div><span>创建时间</span><strong>{{ formatDate(ticket.createdAt) }}</strong></div><div><span>更新时间</span><strong>{{ formatDate(ticket.updatedAt) }}</strong></div><div><span>处理人</span><strong>{{ ticket.assigneeId || '待分配' }}</strong></div></div>
         <el-alert v-if="ticket.categoryReason" title="AI 分类理由" :description="ticket.categoryReason" type="info" :closable="false" show-icon />
+        <div v-if="ticket.aiStatus === 'FAILED'" class="detail-actions"><el-button type="warning" plain :loading="retrying" @click="retryClassification">重新分类</el-button></div>
       </el-card>
 
       <el-card v-if="editable" shadow="never" class="form-card">
