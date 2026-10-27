@@ -2,9 +2,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatDotRound, InfoFilled } from '@element-plus/icons-vue'
-import { getTicket, updateTicket } from '../../api/tickets'
+import { InfoFilled } from '@element-plus/icons-vue'
+import { createTicketMessage, getTicket, listTicketMessages, updateTicket } from '../../api/tickets'
 import { showApiError } from '../../api/http'
+import TicketMessagePanel from '../../components/TicketMessagePanel.vue'
 import {
   AI_STATUS_LABELS,
   TICKET_CATEGORY_LABELS,
@@ -19,6 +20,10 @@ const router = useRouter()
 const loading = ref(true)
 const saving = ref(false)
 const ticket = ref(null)
+const messages = ref([])
+const messagesLoading = ref(false)
+const messageSending = ref(false)
+const messagePanelRef = ref()
 const formRef = ref()
 const form = reactive({ title: '', description: '' })
 const rules = {
@@ -33,10 +38,38 @@ async function loadTicket() {
     ticket.value = await getTicket(route.params.id)
     form.title = ticket.value.title
     form.description = ticket.value.description
+    await loadMessages()
   } catch (error) {
     showApiError(error, '工单详情加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadMessages() {
+  if (!ticket.value) return
+  messagesLoading.value = true
+  try {
+    messages.value = await listTicketMessages(ticket.value.id)
+  } catch (error) {
+    showApiError(error, '消息加载失败')
+  } finally {
+    messagesLoading.value = false
+  }
+}
+
+async function sendMessage(payload) {
+  if (!ticket.value) return
+  messageSending.value = true
+  try {
+    await createTicketMessage(ticket.value.id, payload)
+    messagePanelRef.value?.clear()
+    await loadMessages()
+    ElMessage.success('回复已发送')
+  } catch (error) {
+    showApiError(error, '回复发送失败，请稍后重试')
+  } finally {
+    messageSending.value = false
   }
 }
 
@@ -88,7 +121,7 @@ onMounted(loadTicket)
         </el-form>
       </el-card>
       <el-card v-else shadow="never" class="notice-card"><el-icon><InfoFilled /></el-icon><span>工单已进入处理流程，标题和描述暂不可修改。</span></el-card>
-      <el-card shadow="never" class="notice-card"><el-icon><ChatDotRound /></el-icon><span>公开回复功能将在工单消息接口接入后开放。</span></el-card>
+      <TicketMessagePanel ref="messagePanelRef" :messages="messages" :loading="messagesLoading" :sending="messageSending" :disabled="ticket.status === 'CLOSED'" @send="sendMessage" />
     </template>
   </div>
 </template>

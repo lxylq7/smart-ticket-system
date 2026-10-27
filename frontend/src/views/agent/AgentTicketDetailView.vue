@@ -2,9 +2,9 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import { ChatDotRound } from '@element-plus/icons-vue'
-import { changeTicketStatus, getTicket } from '../../api/tickets'
+import { changeTicketStatus, createTicketMessage, getTicket, listTicketMessages } from '../../api/tickets'
 import { showApiError } from '../../api/http'
+import TicketMessagePanel from '../../components/TicketMessagePanel.vue'
 import {
   AI_STATUS_LABELS,
   TICKET_CATEGORY_LABELS,
@@ -19,6 +19,10 @@ const router = useRouter()
 const loading = ref(true)
 const saving = ref(false)
 const ticket = ref(null)
+const messages = ref([])
+const messagesLoading = ref(false)
+const messageSending = ref(false)
+const messagePanelRef = ref()
 const targetStatus = ref('')
 const remark = ref('')
 const transitionLabels = Object.freeze({
@@ -35,10 +39,38 @@ async function loadTicket() {
   loading.value = true
   try {
     ticket.value = await getTicket(route.params.id)
+    await loadMessages()
   } catch (error) {
     showApiError(error, '工单详情加载失败，或该工单已不在你的授权范围内')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadMessages() {
+  if (!ticket.value) return
+  messagesLoading.value = true
+  try {
+    messages.value = await listTicketMessages(ticket.value.id)
+  } catch (error) {
+    showApiError(error, '消息加载失败')
+  } finally {
+    messagesLoading.value = false
+  }
+}
+
+async function sendMessage(payload) {
+  if (!ticket.value) return
+  messageSending.value = true
+  try {
+    await createTicketMessage(ticket.value.id, payload)
+    messagePanelRef.value?.clear()
+    await loadMessages()
+    ElMessage.success(payload.visibility === 'INTERNAL' ? '内部备注已保存' : '回复已发送')
+  } catch (error) {
+    showApiError(error, '消息发送失败，请稍后重试')
+  } finally {
+    messageSending.value = false
   }
 }
 
@@ -97,7 +129,7 @@ onMounted(loadTicket)
         </template>
         <el-empty v-else description="当前状态没有客服可执行的下一步操作" />
       </el-card>
-      <el-card shadow="never" class="notice-card"><el-icon><ChatDotRound /></el-icon><span>公开回复和内部备注将在工单消息接口接入后开放。</span></el-card>
+      <TicketMessagePanel ref="messagePanelRef" :messages="messages" :loading="messagesLoading" :sending="messageSending" allow-internal :disabled="ticket.status === 'CLOSED'" @send="sendMessage" />
     </template>
   </div>
 </template>
